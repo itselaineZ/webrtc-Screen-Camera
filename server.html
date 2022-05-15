@@ -5,6 +5,7 @@
             font-size: 24px;
         }
     </style>
+    <script type="javascript" src="/root/webrtc/fix-webm-duration.js"></script>
 </head>
 
 <body>
@@ -14,20 +15,64 @@
 
     <script src="//cdn.bootcdn.net/ajax/libs/socket.io/3.0.4/socket.io.js"></script>
     <script src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.js"></script>
+    <script type="javascript" src="/root/webrtc/fix-webm-duration.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.9.5/dist/ffmpeg.min.js"></script>
+    <script src="https://www.webrtc-experiment.com/EBML.js"></script>
     <script>
-        //封装一部分函数
+	const {createFFmpeg, fetchFile} = FFmpeg;
+	const ffmpeg = createFFmpeg({log:true});
+        window.onload = function(){
+	  //var ysFixWebmDuration = ysFixWebmDuration;
+	var recorderFile;
+	function getSeekableBlob(inputBlob, num) {
+    // EBML.js copyrights goes to: https://github.com/legokichi/ts-ebml
+    if (typeof EBML === 'undefined') {
+        throw new Error('Please link: https://www.webrtc-experiment.com/EBML.js');
+    }
+
+    var reader = new EBML.Reader();
+    var decoder = new EBML.Decoder();
+    var tools = EBML.tools;
+
+    var fileReader = new FileReader();
+    fileReader.onload = function(e) {
+        var ebmlElms = decoder.decode(this.result);
+        ebmlElms.forEach(function(element) {
+            reader.read(element);
+        });
+        reader.stop();
+        var refinedMetadataBuf = tools.makeMetadataSeekable(reader.metadatas, reader.duration, reader.cues);
+        var body = this.result.slice(reader.metadataSize);
+        var newBlob = new Blob([refinedMetadataBuf, body], {
+            type: 'video/webm'
+        });
+
+	console.log(newBlob);
+	recorderFile = newBlob;
+	const url = window.URL.createObjectURL(recorderFile);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'video'+num+'.webm';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+        
+    };
+    fileReader.readAsArrayBuffer(inputBlob);
+}
+	
         function getUserMedia(constrains, success, error) {
             if (navigator.mediaDevices.getUserMedia) {
-                //最新标准API
                 promise = navigator.mediaDevices.getUserMedia(constrains).then(success).catch(error);
             } else if (navigator.webkitGetUserMedia) {
-                //webkit内核浏览器
                 promise = navigator.webkitGetUserMedia(constrains).then(success).catch(error);
             } else if (navigator.mozGetUserMedia) {
-                //Firefox浏览器
                 promise = navagator.mozGetUserMedia(constrains).then(success).catch(error);
             } else if (navigator.getUserMedia) {
-                //旧版API
                 promise = navigator.getUserMedia(constrains).then(success).catch(error);
             }
         }
@@ -38,7 +83,6 @@
 
         const localVideoElm = document.getElementById("video-local");
 
-        //STUN,TURN服务器配置参数
         const iceServer = {
             iceServers: [{ urls: ["stun:ss-turn1.xirsys.com"] }, { username: "CEqIDkX5f51sbm7-pXxJVXePoMk_WB7w2J5eu0Bd00YpiONHlLHrwSb7hRMDDrqGAAAAAF_OT9V0dWR1d2Vi", credential: "446118be-38a4-11eb-9ece-0242ac140004", urls: ["turn:ss-turn1.xirsys.com:80?transport=udp", "turn:ss-turn1.xirsys.com:3478?transport=udp"] }]
         };
@@ -47,12 +91,46 @@
         var pc = [];
         var localStream = null;
 	var num = 0;
+	var mediaRecorder = [];
+        var recordChunks = [];
+        var clientnum1 = [], clientnum2 = [];
+        var recordMediaType = 'video/webm;codecs=vp8,opus';
+	var startTime = [];
+
+	function StartRecord(stream, num) {
+            let option = { mimeType: recordMediaType };
+            mediaRecorder[num] = new MediaRecorder(stream, option);
+            console.log(num+'recorder statred');
+            recordChunks[num] = [];
+            mediaRecorder[num].start(80);
+	    startTime[num] = new Date().getTime();
+
+            mediaRecorder[num].ondataavailable = function (e) {
+                console.log("data available", e.data);
+                recordChunks[num].push(e.data);
+            }
+
+        }
+
+        function StopRecord(num) {
+            if (!mediaRecorder[num]) {
+                console.log('stream '+num+' is not created!');
+                return;
+            }
+            mediaRecorder[num].stop();
+	    var duration = new Date().getTime() - startTime[num];
+            console.log('recorder '+num+' stopped');
+
+            const blob = new Blob(recordChunks[num], { type: recordMediaType });
+	    getSeekableBlob(blob, num);
+	    //console.log(blob);
+	    //console.log(recorderFile);
+        }
 
         function StartCall(parterName, createOffer) {
 
             pc[parterName] = new RTCPeerConnection(iceServer);
 
-            //当需要你通过信令服务器将一个ICE候选发送给另一个对等端时，本地ICE层将会调用你的 icecandidate 事件处理程序。有关更多信息，请参阅Sending ICE candidates 以查看此示例的代码。
             pc[parterName].onicecandidate = ({ candidate }) => {
                 socket.emit('ice candidates', {
                     candidate: candidate,
@@ -61,10 +139,12 @@
                 });
             };
 
-            //当向连接中添加磁道时，track 事件的此处理程序由本地WebRTC层调用。例如，可以将传入媒体连接到元素以显示它。详见 Receiving new streams 。
             pc[parterName].ontrack = (ev) => {
 		console.log(ev);
                 let str = ev.streams[0];
+		for (let i = 0; i<num; ++i)
+		  if (str == mediaRecorder[i].stream)
+			return;
 
                 if (document.getElementById(`${num}-video`)) {
                     document.getElementById(`${num}-video`).srcObject = str;
@@ -88,8 +168,12 @@
                     newVideo.controls = true;
                     newVideo.srcObject = str;
 		    newVideo.width = 900;
-		    
+		    if (clientnum1[parterName] == undefined)
+                        clientnum1[parterName] = num;
+                    else
+                        clientnum2[parterName] = num;
                     document.getElementById(`${num}-div`).appendChild(newVideo);
+		    StartRecord(str, num);
 		}
 		num++;
             }
@@ -102,7 +186,6 @@
 
         socket.on('connect', () => {
 
-            //输出内容 其中 socket.id 是当前socket连接的唯一ID
             console.log('connect ' + socket.id);
 
            // $('#user-id').text(socket.id);
@@ -117,22 +200,21 @@
             socket.on('need connect', (data) => {
                 socket.emit('ok we connect', { receiver: data.sender, sender: socket.id });
             });
-            //某个用户失去连接时，我们需要获取到这个信息
+           
             socket.on('user disconnected', (socket_id) => {
                 console.log('disconnect : ' + socket_id);
-
+		StopRecord(clientnum1[socket_id]);
+                StopRecord(clientnum2[socket_id]);
                 $('#user-list li[user-id="' + socket_id + '"]').remove();
             })
 
-            //监听发送的sdp事件
+           
             socket.on('sdp', (data) => {
-                //如果时offer类型的sdp
+                
                 if (data.description.type === 'offer') {
-                    //那么被呼叫者需要开启RTC的一套流程，同时不需要createOffer，所以第二个参数为false
+                    
                     StartCall(data.sender, false);
-                    //把发送者(offer)的描述，存储在接收者的remoteDesc中。
                     let desc = new RTCSessionDescription(data.description);
-                    //按1-13流程走的
                     pc[data.sender].setRemoteDescription(desc).then(() => {
 
                         pc[data.sender].createAnswer().then((answer) => {
@@ -149,26 +231,22 @@
 
                     })
                 } else if (data.description.type === 'answer') {
-                    //如果使应答类消息（那么接收到这个事件的是呼叫者）
                     let desc = new RTCSessionDescription(data.description);
                     pc[data.sender].setRemoteDescription(desc);
                 }
             })
 
-            //如果是ice candidates的协商信息
             socket.on('ice candidates', (data) => {
                 console.log('ice candidate: ' + data.candidate);
-                //{ candidate: candidate, to: partnerName, sender: socketID }
-                //如果ice candidate非空（当candidate为空时，那么本次协商流程到此结束了）
                 if (data.candidate) {
                     var candidate = new RTCIceCandidate(data.candidate);
-                    //讲对方发来的协商信息保存
                     pc[data.sender].addIceCandidate(candidate).catch();//catch err function empty
                 }
             })
 
 
         });
+}
 
 
     </script>

@@ -20,19 +20,14 @@
     <script src="//cdn.bootcdn.net/ajax/libs/socket.io/3.0.4/socket.io.js"></script>
     <script src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.js"></script>
     <script>
-        //封装一部分函数
         function getUserMedia(constrains, success, error) {
             if (navigator.mediaDevices.getUserMedia) {
-                //最新标准API
                 promise = navigator.mediaDevices.getUserMedia(constrains).then(success).catch(error);
             } else if (navigator.webkitGetUserMedia) {
-                //webkit内核浏览器
                 promise = navigator.webkitGetUserMedia(constrains).then(success).catch(error);
             } else if (navigator.mozGetUserMedia) {
-                //Firefox浏览器
                 promise = navagator.mozGetUserMedia(constrains).then(success).catch(error);
             } else if (navigator.getUserMedia) {
-                //旧版API
                 promise = navigator.getUserMedia(constrains).then(success).catch(error);
             }
         }
@@ -47,13 +42,12 @@
         }
 
 	function canGetDisplayMediaUse() {
-	    return (navigator.mediaDevices && 'getDisplayMedia' in navigator.mediaDevices);
+	    return (navigator && navigator.mediaDevices && 'getDisplayMedia' in navigator.mediaDevices);
 	}
 
         const localVideoElm = document.getElementById("video-local");
 	const localScreenElm = document.getElementById("screen-local");
 
-        //STUN,TURN服务器配置参数
         const iceServer = {
             iceServers: [{ urls: ["stun:ss-turn1.xirsys.com"] }, { username: "CEqIDkX5f51sbm7-pXxJVXePoMk_WB7w2J5eu0Bd00YpiONHlLHrwSb7hRMDDrqGAAAAAF_OT9V0dWR1d2Vi", credential: "446118be-38a4-11eb-9ece-0242ac140004", urls: ["turn:ss-turn1.xirsys.com:80?transport=udp", "turn:ss-turn1.xirsys.com:3478?transport=udp"] }]
         };
@@ -67,42 +61,55 @@
 
             if (canGetUserMediaUse()) {
                 getUserMedia({
-                    video: true,
-                    audio: false
+                    video: {frameRate: { min: 20 }, width: { min: 1280, ideal: 1920 }, height: { min: 720, ideal: 1080 }, aspectRatio: 16 / 9},
+                    audio: true
                 }, (stream) => {
                     localStream = stream;
                     localVideoElm.srcObject = stream;
                     $(localVideoElm).width(800);
                 }, (err) => {
-                    console.log('访问用户媒体失败: ', err.name, err.message);
+                    console.log('getusermedia error', err.name, err.message);
                 });
             } else {
-                alert('您的浏览器不兼容');
+                alert('not compatible');
             }
         }
 
 	function InitScreen() {
-	    if (canGetUserMediaUse()) {
+	    /*if (canGetDisplayMediaUse()) {
+		getDisplayMedia({
+                    video: {mediaSource: 'screen', width: {exact:1920}, height: {exact:1080}},
+                    audio: true
+                }, (stream) => {
+                    screenStream = stream;
+                    localScreenElm.srcObject = stream;
+                    $(localScreenElm).width(800);
+                }, (err) => {
+                    console.log('getusermedia error', err.name, err.message);
+                });
+	    }
+	    else */if (canGetUserMediaUse()) {
 	    	getUserMedia({
-		    video: {mediaSource: 'screen'},
-		    audio: false
+		    video: {mediaSource: 'screen', width: {exact:1920}, height: {exact:1080}},
+		    audio: true
 		}, (stream) => {
 		    screenStream = stream;
 		    localScreenElm.srcObject = stream;
 		    $(localScreenElm).width(800);
 		}, (err) => {
-		    console.log('访问屏幕媒体失败: ', err.name, err.message);
+		    console.log('getusermedia error', err.name, err.message);
 		});
 	    }else {
-		alert('您的浏览器不兼容');
+		alert('not compatible');
 	    }
 	}
 
         function StartCall(parterName, createOffer) {
 
             pc[parterName] = new RTCPeerConnection(iceServer);
+	    console.log(localStream);
+	    console.log(screenStream);
 
-            //如果已经有本地流，那么直接获取Tracks并调用addTrack添加到RTC对象中。
             if (localStream) {
 
                 localStream.getTracks().forEach((track) => {
@@ -120,16 +127,13 @@
 		InitScreen();
 	    }
 
-            //如果是呼叫方,那么需要createOffer请求
             if (createOffer) {
-                //每当WebRTC基础结构需要你重新启动会话协商过程时，都会调用此函数。它的工作是创建和发送一个请求，给被叫方，要求它与我们联系。
+
                 pc[parterName].onnegotiationneeded = () => {
-                    //https://developer.mozilla.org/zh-CN/docs/Web/API/RTCPeerConnection/createOffer
 
                     pc[parterName].createOffer().then((offer) => {
                         return pc[parterName].setLocalDescription(offer);
                     }).then(() => {
-                        //把发起者的描述信息通过Signal Server发送到接收者
                         socket.emit('sdp', {
                             type: 'video-offer',
                             description: pc[parterName].localDescription,
@@ -140,7 +144,6 @@
                 };
             }
 
-            //当需要你通过信令服务器将一个ICE候选发送给另一个对等端时，本地ICE层将会调用你的 icecandidate 事件处理程序。有关更多信息，请参阅Sending ICE candidates 以查看此示例的代码。
             pc[parterName].onicecandidate = ({ candidate }) => {
                 socket.emit('ice candidates', {
                     candidate: candidate,
@@ -156,7 +159,6 @@
             InitCamera();
 	    InitScreen();
 
-            //输出内容 其中 socket.id 是当前socket连接的唯一ID
             console.log('connect ' + socket.id);
 
             $('#user-id').text(socket.id);
@@ -170,16 +172,14 @@
 
             socket.on('need connect', (data) => {
                 console.log(data);
-                //socket.emit('ok we connect', { receiver: data.sender, sender: socket.id });
             });
 
-            //某个用户失去连接时，我们需要获取到这个信息
             socket.on('user disconnected', (socket_id) => {
                 console.log('disconnect : ' + socket_id);
 
                 $('#user-list li[user-id="' + socket_id + '"]').remove();
             })
-            //链接吧..
+
             socket.on('ok we connect', (data) => {
                 console.log(data);
 		let li = $('<li></li>').text(data.sender).attr('user-id', data.sender);
@@ -187,26 +187,19 @@
 		let init = $('<button class="call">initial my screen</button>');
                 init.appendTo(li);
 		$(init).click(function() {
-		    	//StartCall($(this).parent().attr('user-id'), true);
 			InitScreen();
 		});
 		let button = $('<button class="call">connect</button>');
                 button.appendTo(li);
                 $(button).click(function () {
-                        //console.log($(this).parent().attr('user-id'));
                         StartCall($(this).parent().attr('user-id'), true);
                 });
             });
 
-            //监听发送的sdp事件
             socket.on('sdp', (data) => {
-                //如果时offer类型的sdp
                 if (data.description.type === 'offer') {
-                    //那么被呼叫者需要开启RTC的一套流程，同时不需要createOffer，所以第二个参数为false
                     StartCall(data.sender, false);
-                    //把发送者(offer)的描述，存储在接收者的remoteDesc中。
                     let desc = new RTCSessionDescription(data.description);
-                    //按1-13流程走的
                     pc[data.sender].setRemoteDescription(desc).then(() => {
 
                         pc[data.sender].createAnswer().then((answer) => {
@@ -223,20 +216,15 @@
 
                     })
                 } else if (data.description.type === 'answer') {
-                    //如果使应答类消息（那么接收到这个事件的是呼叫者）
                     let desc = new RTCSessionDescription(data.description);
                     pc[data.sender].setRemoteDescription(desc);
                 }
             })
 
-            //如果是ice candidates的协商信息
             socket.on('ice candidates', (data) => {
                 console.log('ice candidate: ' + data.candidate);
-                //{ candidate: candidate, to: partnerName, sender: socketID }
-                //如果ice candidate非空（当candidate为空时，那么本次协商流程到此结束了）
                 if (data.candidate) {
                     var candidate = new RTCIceCandidate(data.candidate);
-                    //讲对方发来的协商信息保存
                     pc[data.sender].addIceCandidate(candidate).catch();//catch err function empty
                 }
             })
