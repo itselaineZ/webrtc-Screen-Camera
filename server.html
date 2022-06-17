@@ -23,7 +23,6 @@
         const ffmpeg = createFFmpeg({ log: true });
         window.onload = function () {
             //var ysFixWebmDuration = ysFixWebmDuration;
-            var recorderFile;
             function getSeekableBlob(inputBlob, num) {
                 // EBML.js copyrights goes to: https://github.com/legokichi/ts-ebml
                 if (typeof EBML === 'undefined') {
@@ -48,51 +47,23 @@
                     });
 
                     console.log(newBlob);
-                    recorderFile = newBlob;
-                    const url = window.URL.createObjectURL(recorderFile);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    a.download = 'video' + num + '.webm';
-                    var pth = 'video' + num + '.webm';
-                    document.body.appendChild(a);
+                    var pth = 'video' + '.webm';
+                    var formData = new FormData();
+                    formData.append("content", newBlob, pth);
+                    formData.append("title", pth);
                     let xhr = new XMLHttpRequest
                     xhr.open('post', '/saveVideo')
-                    xhr.send(recorderFile)
+                    xhr.send(formData)
                     xhr.onreadystatechange = function () {
                         if (xhr.readyState === 4) {
                             if (xhr.status === 200) {
                                 const data = JSON.parse(xhr.responseText)
                                 console.log('³É¹¦£º', data)
                             } else {
-                                console.error('Ê§°Ü')
+                                console.log('Ê§°Ü')
                             }
                         }
                     }
-                    // var fd = new FormData();
-                    // fd.append('filetitle',pth);
-                    // fd.append('filedata',newBlob);
-                    // $.ajax({
-                    //     type:'POST',
-                    //     url:'/saveVideo',
-                    //     data:fd,
-                    //     processData:false,
-                    //     contentType:false
-                    // }).done(function(data){
-                    // });
-                    //var buffer = Buffer.from(fileReader.result);
-                    // fs.writeFile(pth, recorderFile, {}, (err,res)=>{
-                    //     if(err){
-                    //         console.log(err)
-                    //         return 
-                    //     }
-                    //     console.log('video saved!')
-                    // })
-                    //a.click();
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(url);
-                    }, 100);
                 };
                 fileReader.readAsArrayBuffer(inputBlob);
             }

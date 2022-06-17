@@ -1,10 +1,12 @@
 var express = require('express');
 var Buffer = require('buffer');
+var cors = require('cors');
 var app = express();
 var http = require('http').createServer(app);
 var saveRouter = require('./save');
 
 app.use('/',saveRouter);
+app.use(cors()) //¿çÓòÎÊÌâ
 
 var fs = require('fs');
 let sslOptions = {
@@ -17,7 +19,8 @@ const https = require('https').createServer(sslOptions, app);
 var io = require('socket.io')(https);
 
 var path = require('path');
-app.use(express.static(path.join(__dirname, 'public')));
+//app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, './')));
 
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
