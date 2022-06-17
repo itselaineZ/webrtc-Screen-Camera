@@ -1,11 +1,15 @@
 var express = require('express');
+var Buffer = require('buffer');
 var app = express();
 var http = require('http').createServer(app);
+var saveRouter = require('./save');
+
+app.use('/',saveRouter);
 
 var fs = require('fs');
 let sslOptions = {
-    key: fs.readFileSync('/etc/ssl/certs/private.pem'),//里面的文件替换成你生成的私钥
-    cert: fs.readFileSync('/etc/ssl/certs/server.csr')//里面的文件替换成你生成的证书
+    key: fs.readFileSync('./private.pem'),//里面的文件替换成你生成的私钥
+    cert: fs.readFileSync('./server.csr')//里面的文件替换成你生成的证书
 };
 
 const https = require('https').createServer(sslOptions, app);
@@ -14,7 +18,6 @@ var io = require('socket.io')(https);
 
 var path = require('path');
 app.use(express.static(path.join(__dirname, 'public')));
-
 
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
@@ -81,6 +84,8 @@ io.on("connection", (socket) => {
 });
 
 
-https.listen(3000, () => {
-    console.log('https listening on *:3000');
+https.listen(80, () => {
+    console.log('https listening on *:80');
 });
+
+module.exports = app;
