@@ -1,0 +1,25 @@
+<head>
+    <title>Login</title>
+    <script src="https://cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.min.js"></script>
+</head>
+
+<body>
+    <h1>Login</h1>
+    <form action="https://118.195.242.229:80/login">
+        <p>number<input type="text" name="name" size="10"></p>
+        <p>grade<input type="text" name="grade" size="10"></p>
+        <p>password<input type="password" id="password" size="10"></p>
+        <input type="hidden" id="md5-password" name="password">
+        <p><input type="submit" value="submit" onclick="md5change()">
+            <input type="reset" value="reset">
+        </p>
+    </form>
+    <script>
+        function md5change() {
+            let input_password = document.getElementById('password')
+            let pwd = document.getElementById('md5-password')
+            pwd.value = md5(input_password.value);
+            console.log(document.getElementById('md5-password').value);
+        }
+    </script>
+</body>

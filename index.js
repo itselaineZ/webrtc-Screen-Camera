@@ -1,12 +1,16 @@
 var express = require('express');
 var Buffer = require('buffer');
 var cors = require('cors');
+var logger = require('morgan');
+var cookieParser = require('cookie-parser');
+var ejs = require('ejs');
 var app = express();
 var http = require('http').createServer(app);
-var saveRouter = require('./save');
 
-app.use('/',saveRouter);
-app.use(cors()) //跨域问题
+var saveRouter = require('./save');
+var loginRouter = require('./login');
+
+//app.use(cors()) //跨域问题
 
 var fs = require('fs');
 let sslOptions = {
@@ -19,20 +23,36 @@ const https = require('https').createServer(sslOptions, app);
 var io = require('socket.io')(https);
 
 var path = require('path');
-//app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.static(path.join(__dirname, './')));
+app.set('views',"public");	//设置视图的对应目录
+app.set("view engine","ejs");		//设置默认的模板引擎
+app.engine('ejs', ejs.__express);		//定义模板引擎
 
+
+app.use(logger('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.use('/',saveRouter);
+app.use('/',loginRouter);
+
+/*
 app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/index.html');
+    res.sendFile(__dirname + '/login.html');
   });
-
 app.get('/camera', (req, res) => {
-    res.sendFile(__dirname + '/camera.html');
+    res.sendFile(__dirname + '/camera.ejs');
 });
 
 app.get('/server', (req, res) => {
     res.sendFile(__dirname + '/server.html');
 });
+
+app.get('/login', (req, res) => {
+    res.sendFile(__dirname + '/login.html');
+  });
+*/
 
 io.on("connection", (socket) => {
     //连接加入子房间

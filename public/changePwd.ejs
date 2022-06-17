@@ -1,0 +1,45 @@
+<head>
+    <title>ChangePassword</title>
+    <script src="https://cdn.bootcss.com/blueimp-md5/2.10.0/js/md5.min.js"></script>
+</head>
+
+<body>
+    <h1>ChangePassword</h1>
+    <form action="https://118.195.242.229:80/changepwd" onsubmit="return md5change()">
+        <p>number<input type="text" size="10" disabled="disabled" value=<%=msg.stu_no %>></p>
+        <p>grade<input type="text" size="10" disabled="disabled" value=<%=msg.stu_grade %>></p>
+        <p>new password<input type="password" id="pwd1" size="10"></p>
+        <p>confirm password<input type="password" id="pwd2" size="10"></p>
+        <input type="hidden" id="name_hidden" name="name_hidden" value=<%=msg.stu_no %>>
+        <input type="hidden" id="grade_hidden" name="grade_hidden" value=<%=msg.stu_grade %>>
+        <input type="hidden" id="md5-password" name="password">
+        <p><input type="submit" value="submit">
+            <input type="reset" value="reset">
+        </p>
+    </form>
+    <script>
+        function md5change() {
+            let input_password1 = document.getElementById('pwd1').value
+            let input_password2 = document.getElementById('pwd2').value
+            //判断密码相同及强度
+            if (input_password1 == input_password2) {
+                var pwd = input_password1
+                let lv = 0
+                if (pwd.match(/[a-z]/g)) { lv++; }
+                if (pwd.match(/[A-Z]/g)) { lv++; }
+                if (pwd.match(/\d/g)) { lv++; }
+                if (pwd.match(/[~!@#\$%^&*\{\};,.\?\/'"]/g)) { lv++; }
+                if (pwd.length < 10) { lv = 0; }
+                if (lv < 4) {
+                    return false
+                }
+                let passwd = document.getElementById('md5-password')
+                passwd.value = md5(input_password1);
+                return true
+            }
+            else {
+                return false
+            }
+        }
+    </script>
+</body>
