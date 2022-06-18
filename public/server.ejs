@@ -10,9 +10,8 @@
 
 <body>
     <h1 id="user-id">
-        <%= msg.stu_no %>
+        <%= msg.user.stu_no %>
     </h1>
-
     <div id="videos"></div>
 
     <script src="//cdn.bootcdn.net/ajax/libs/socket.io/3.0.4/socket.io.js"></script>
@@ -25,7 +24,7 @@
         const ffmpeg = createFFmpeg({ log: true });
         window.onload = function () {
             //var ysFixWebmDuration = ysFixWebmDuration;
-            function getSeekableBlob(inputBlob, num) {
+            function getSeekableBlob(inputBlob, num, kind, parterName) {
                 // EBML.js copyrights goes to: https://github.com/legokichi/ts-ebml
                 if (typeof EBML === 'undefined') {
                     throw new Error('Please link: https://www.webrtc-experiment.com/EBML.js');
@@ -49,11 +48,16 @@
                     });
 
                     console.log(newBlob);
-                    var pth = 'video' + num + '.webm';
                     var formData = new FormData();
-                    formData.append("content", newBlob, pth);
-                    formData.append("title", pth);
+                    formData.append("content", newBlob);
+                    formData.append("stu_no", stutable[parterName].stu_no)
+                    formData.append("stu_name", stutable[parterName].stu_name)
+                    formData.append("kind", kind)
+
+                    console.log(formData.get("content"))
+
                     let xhr = new XMLHttpRequest
+                    xhr.overrideMimeType("video/webm;charset=gb2312")
                     xhr.open('post', '/saveVideo')
                     xhr.send(formData)
                     xhr.onreadystatechange = function () {
@@ -101,6 +105,7 @@
             var clientnum1 = [], clientnum2 = [];
             var recordMediaType = 'video/webm;codecs=vp8,opus';
             var startTime = [];
+            var stutable = [];
 
             function StartRecord(stream, num) {
                 let option = { mimeType: recordMediaType };
@@ -109,15 +114,15 @@
                 recordChunks[num] = [];
                 mediaRecorder[num].start(80);
                 startTime[num] = new Date().getTime();
+                console.log(mediaRecorder[num].state)
 
                 mediaRecorder[num].ondataavailable = function (e) {
                     console.log("data available", e.data);
                     recordChunks[num].push(e.data);
                 }
-
             }
 
-            function StopRecord(num) {
+            function StopRecord(num, kind, parterName) {
                 if (!mediaRecorder[num]) {
                     console.log('stream ' + num + ' is not created!');
                     return;
@@ -127,7 +132,7 @@
                 console.log('recorder ' + num + ' stopped');
 
                 const blob = new Blob(recordChunks[num], { type: recordMediaType });
-                getSeekableBlob(blob, num);
+                getSeekableBlob(blob, num, kind, parterName);
                 //console.log(blob);
                 //console.log(recorderFile);
             }
@@ -145,7 +150,7 @@
                 };
 
                 pc[parterName].ontrack = (ev) => {
-                    //console.log(ev);
+                    console.log(ev);
                     let str = ev.streams[0];
                     for (let i = 0; i < num; ++i)
                         if (str == mediaRecorder[i].stream)
@@ -164,7 +169,7 @@
                         let newP = document.createElement('div');
                         newP.id = `${num}-divp`;
                         newP.style.width = 900;
-                        newP.innerHTML = parterName;
+                        newP.innerHTML = stutable[parterName].stu_no + '-' + stutable[parterName].stu_name;
                         document.getElementById(`${num}-div`).appendChild(newP);
 
                         let newVideo = document.createElement('video');
@@ -203,20 +208,20 @@
                 });
 
                 socket.on('need connect', (data) => {
-                    let no = document.getElementById('user-id').value;
-                    socket.emit('ok we connect', { receiver: data.sender, sender: socket.id});
+                    console.log("ok we connect")
+                    stutable[data.sender] = data.msg;
+                    socket.emit('ok we connect', { receiver: data.sender, sender: {id:socket.id, no_id: '<%= msg.user.stu_no%>'} });
                 });
 
                 socket.on('user disconnected', (socket_id) => {
                     console.log('disconnect : ' + socket_id);
-                    StopRecord(clientnum1[socket_id]);
-                    StopRecord(clientnum2[socket_id]);
+                    StopRecord(clientnum1[socket_id], "video", socket_id);
+                    StopRecord(clientnum2[socket_id], "screen", socket_id);
                     $('#user-list li[user-id="' + socket_id + '"]').remove();
                 })
 
 
                 socket.on('sdp', (data) => {
-
                     if (data.description.type === 'offer') {
 
                         StartCall(data.sender, false);

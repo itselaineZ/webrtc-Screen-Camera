@@ -8,10 +8,38 @@
 </head>
 
 <body>
-    <h1 id="user-id"> <%= msg.stu_no %> </h1>
+    <h1 id="user-id">
+        <%= msg.user.stu_no %>
+    </h1>
     <ul id="user-list">
     </ul>
-    
+    <p>
+        Camera-video:
+        <input type="radio" id="cvyes" name="cameravideo" value="1">
+        <label for="cvyes">yes</label>
+        <input type="radio" id="cvno" name="cameravideo" value="0">
+        <label for="cvno">no</label>
+        <br>
+        Camera-sound:
+        <input type="radio" id="csyes" name="camerasound" value="1">
+        <label for="csyes">yes</label>
+        <input type="radio" id="csno" name="camerasound" value="0">
+        <label for="csno">no</label>
+        <br>
+        Screen-video:
+        <input type="radio" id="svyes" name="screenvideo" value="1">
+        <label for="svyes">yes</label>
+        <input type="radio" id="svno" name="screenvideo" value="0">
+        <label for="svno">no</label>
+        <br>
+        Screen-sound:
+        <input type="radio" id="ssyes" name="screensound" value="1">
+        <label for="ssyes">yes</label>
+        <input type="radio" id="ssno" name="screensound" value="0">
+        <label for="ssno">no</label>
+        <br>
+    </p>
+    <button type="button" name="begin" onclick="dataBegin()">Begin</button>
     <div><video id="video-local" controls autoplay></video></div>
     <div><video id="screen-local" controls autoplay></video></div>
 
@@ -20,6 +48,23 @@
     <script src="//cdn.bootcdn.net/ajax/libs/socket.io/3.0.4/socket.io.js"></script>
     <script src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.js"></script>
     <script>
+        function dataBegin() {
+            let cameravideo = document.getElementsByName('cameravideo')
+            let camerasound = document.getElementsByName('camerasound')
+            let screenvideo = document.getElementsByName('screenvideo')
+            let screensound = document.getElementsByName('screensound')
+            console.log(cameravideo)
+            console.log(camerasound)
+            console.log(screenvideo)
+            console.log(screensound)
+            if (cameravideo[0].checked) {
+                InitCamera(camerasound[0].checked)
+            }
+            if (screenvideo[0].checked) {
+                InitScreen(screensound[0].checked)
+            }
+        }
+
         function getUserMedia(constrains, success, error) {
             if (navigator.mediaDevices.getUserMedia) {
                 promise = navigator.mediaDevices.getUserMedia(constrains).then(success).catch(error);
@@ -32,21 +77,21 @@
             }
         }
 
-	function getScreenMedia(constrains, success, error) {
-	    if (navigator.mediaDevices.getDisplayMedia)
-		promise = navigator.mediaDevices.getDisplayMedia(constrains).then(success).catch(error);
-	}
+        function getScreenMedia(constrains, success, error) {
+            if (navigator.mediaDevices.getDisplayMedia)
+                promise = navigator.mediaDevices.getDisplayMedia(constrains).then(success).catch(error);
+        }
 
         function canGetUserMediaUse() {
             return (navigator.mediaDevices.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
         }
 
-	function canGetDisplayMediaUse() {
-	    return (navigator && navigator.mediaDevices && 'getDisplayMedia' in navigator.mediaDevices);
-	}
+        function canGetDisplayMediaUse() {
+            return (navigator && navigator.mediaDevices && 'getDisplayMedia' in navigator.mediaDevices);
+        }
 
         const localVideoElm = document.getElementById("video-local");
-	const localScreenElm = document.getElementById("screen-local");
+        const localScreenElm = document.getElementById("screen-local");
 
         const iceServer = {
             iceServers: [{ urls: ["stun:ss-turn1.xirsys.com"] }, { username: "CEqIDkX5f51sbm7-pXxJVXePoMk_WB7w2J5eu0Bd00YpiONHlLHrwSb7hRMDDrqGAAAAAF_OT9V0dWR1d2Vi", credential: "446118be-38a4-11eb-9ece-0242ac140004", urls: ["turn:ss-turn1.xirsys.com:80?transport=udp", "turn:ss-turn1.xirsys.com:3478?transport=udp"] }]
@@ -55,14 +100,19 @@
         //PeerConnection
         var pc = [];
         var localStream = null;
-	var screenStream = null;
+        var screenStream = null;
 
-        function InitCamera() {
-
+        function InitCamera(a) {
+            console.log(a)
             if (canGetUserMediaUse()) {
                 getUserMedia({
-                    video: {frameRate: { min: 20 }, width: { min: 1280, ideal: 1920 }, height: { min: 720, ideal: 1080 }, aspectRatio: 16 / 9},
-                    audio: true
+                    video: {
+                        frameRate: { min: '<%= msg.conf.rate %>' },
+                        width: { min: 720, ideal: '<%= msg.conf.width %>' },
+                        height: { min: 540, ideal: '<%= msg.conf.high %>' },
+                        aspectRatio: 16 / 9 
+                    },
+                    audio: a
                 }, (stream) => {
                     localStream = stream;
                     localVideoElm.srcObject = stream;
@@ -75,7 +125,8 @@
             }
         }
 
-	function InitScreen() {
+        function InitScreen(a) {
+            console.log(a)
 	    /*if (canGetDisplayMediaUse()) {
 		getDisplayMedia({
                     video: {mediaSource: 'screen', width: {exact:1920}, height: {exact:1080}},
@@ -89,26 +140,30 @@
                 });
 	    }
 	    else */if (canGetUserMediaUse()) {
-	    	getUserMedia({
-		    video: {mediaSource: 'screen', width: {exact:1920}, height: {exact:1080}},
-		    audio: true
-		}, (stream) => {
-		    screenStream = stream;
-		    localScreenElm.srcObject = stream;
-		    $(localScreenElm).width(800);
-		}, (err) => {
-		    console.log('getusermedia error', err.name, err.message);
-		});
-	    }else {
-		alert('not compatible');
-	    }
-	}
+                getUserMedia({
+                    video: {
+                        mediaSource: 'screen',
+                        width: { exact: 1920 }, 
+                        height: { exact: 1080 }
+                    },
+                    audio: a
+                }, (stream) => {
+                    screenStream = stream;
+                    localScreenElm.srcObject = stream;
+                    $(localScreenElm).width(800);
+                }, (err) => {
+                    console.log('getusermedia error', err.name, err.message);
+                });
+            } else {
+                alert('not compatible');
+            }
+        }
 
         function StartCall(parterName, createOffer) {
 
             pc[parterName] = new RTCPeerConnection(iceServer);
-	    console.log(localStream);
-	    console.log(screenStream);
+            console.log(localStream);
+            console.log(screenStream);
 
             if (localStream) {
 
@@ -116,16 +171,19 @@
                     pc[parterName].addTrack(track, localStream);//should trigger negotiationneeded event
                 });
 
-            }else{
-		InitCamera();
+            } else {
+                dataBegin()
             }
-	    if (screenStream) {
-	    	screenStream.getTracks().forEach((track) => {
-		    pc[parterName].addTrack(track, screenStream);//should trigger negotiationneeded event
-		});	
-	    }else{
-		InitScreen();
-	    }
+            if (screenStream) {
+                screenStream.getTracks().forEach((track) => {
+                    pc[parterName].addTrack(track, screenStream);//should trigger negotiationneeded event
+                });
+            } else {
+                dataBegin()
+            }
+
+            console.log(localStream);
+            console.log(screenStream);
 
             if (createOffer) {
 
@@ -156,19 +214,15 @@
         var socket = io();
 
         socket.on('connect', () => {
-            InitCamera();
-	    InitScreen();
 
             console.log('connect ' + socket.id);
-
-            //$('#user-id').text(socket.id);
 
             pc.push(socket.id);
 
             socket.emit('new user greet', {
                 sender: socket.id,
-                msg: 'hello you!',
-     	    });
+                msg: {stu_no:'<%= msg.user.stu_no %>',stu_name:'<%= msg.user.stu_name %>'},
+            });
 
             socket.on('need connect', (data) => {
                 console.log(data);
@@ -181,18 +235,13 @@
             })
 
             socket.on('ok we connect', (data) => {
-                console.log(data);
-		let li = $('<li></li>').text(data.sender).attr('user-id', data.sender);
+                console.log("receive ok we connect");
+                let li = $('<li></li>').text(data.sender.no_id).attr('user-id', data.sender.no_id);
                 $('#user-list').append(li);
-		let init = $('<button class="call">initial my screen</button>');
-                init.appendTo(li);
-		$(init).click(function() {
-			InitScreen();
-		});
-		let button = $('<button class="call">connect</button>');
+                let button = $('<button class="call">connect</button>');
                 button.appendTo(li);
                 $(button).click(function () {
-                        StartCall($(this).parent().attr('user-id'), true);
+                    StartCall(data.sender.id, true);
                 });
             });
 
