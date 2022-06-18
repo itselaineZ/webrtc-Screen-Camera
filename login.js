@@ -4,6 +4,9 @@ var router = express.Router();
 var mysql = require('mysql');
 var crypto = require('crypto');
 var fs = require('fs')
+var iconv = require('iconv-lite')
+var converter = require('encoding')
+
 
 var connection = mysql.createConnection({
     host: 'localhost',
@@ -152,25 +155,36 @@ router.get('/login', function (req, res) {
     console.log(query1);
     connection.query(query1, function (err, result) {
         //if (err) throw err;
-        console.log(result);
+        //console.log(result);
         if (result.length == 0) {
             res.redirect('/login.html');
         } else {
             var res_json = JSON.parse(JSON.stringify(result));
             var msg = {
-                user:res_json[0],
-                conf:conf
+                user: res_json[0],
+                conf: conf
             };
             if (msg.user.stu_userlevel > '0') {//老师监控端
                 if (msg.user.stu_enable == '1') {//有登录权限
                     var md5 = crypto.createHash('md5');
                     var result = md5.update(msg.user.stu_no).digest('hex');
                     if (msg.user.stu_password !== result) {
-                        res.render("server", { msg }, (err, data) => {
-                            res.send(data);
+                        var query2 = "select * from student where stu_userlevel='0' and stu_enable='1'"
+                        connection.query(query2, function (err, resu) {
+                            var all_stu = JSON.parse(JSON.stringify(resu));
+                            var msg = {
+                                user: res_json[0],
+                                conf: conf,
+                                stu: all_stu
+                            }
+                            console.log(all_stu)
+                            res.render("server", { msg }, (err, data) => {
+                                res.send(data);
+                            })
                         })
                     }
                     else {
+                        console.log(msg)
                         res.render("changePwd", { msg }, (err, data) => {
                             res.send(data);
                         })
@@ -187,6 +201,7 @@ router.get('/login', function (req, res) {
                         })
                     }
                     else {
+                        console.log(msg)
                         res.render("changePwd", { msg }, (err, data) => {
                             res.send(data);
                         })

@@ -1,4 +1,5 @@
 <head>
+    <meta charset="gbk">
     <title>Camera</title>
     <style>
         #user-list>li {
@@ -12,6 +13,31 @@
     <h1 id="user-id">
         <%= msg.user.stu_no %>
     </h1>
+    <button type="button" name="get" onclick="GetState()">Get All Students' State</button>
+    <table border="1">
+        <tr>
+            <th>stu_no</th>
+            <th>stu_state</th>
+        </tr>
+        <% for(var i=0; i < msg.stu.length; i++){ %>
+            <tr id="stu<%= i %>">
+                <td>
+                    <%= msg.stu[i].stu_no %>
+                </td>
+                <td id="stu<%= i %>_state">not init</td>
+            </tr>
+            <% } %>
+    </table>
+    <br><br><br>
+    <select id="stuselect" onChange="displaystu()">
+        <option selected="selected">change student <b class="caret"></b></option>
+        <% for(var i=0; i < msg.stu.length; i++){ %>
+            <option>
+                <%= msg.stu[i].stu_no %>
+            </option>
+            <% } %>
+    </select>
+
     <div id="videos"></div>
 
     <script src="//cdn.bootcdn.net/ajax/libs/socket.io/3.0.4/socket.io.js"></script>
@@ -22,6 +48,45 @@
     <script>
         const { createFFmpeg, fetchFile } = FFmpeg;
         const ffmpeg = createFFmpeg({ log: true });
+        //PeerConnection
+        var pc = [];
+        var localStream = null;
+        var num = 0;
+        var mediaRecorder = [];
+        var recordChunks = [];
+        var clientnum1 = [], clientnum2 = [];
+        var recordMediaType = 'video/webm;codecs=vp8,opus';
+        var startTime = [];
+        var stutable = [];
+        var restutable = [];
+        var stuonline = [];
+        function displaystu() {
+            var sel = document.getElementById('stuselect')
+            var index = sel.selectedIndex
+            var no = sel.options[index].text
+            console.log('aaaaaaaa')
+
+            for (let i = 0; i < num; ++i)
+                document.getElementById(i + '-div').style.display = 'none'
+            document.getElementById(clientnum1[restutable[no]] + '-div').style.display = 'block'
+            document.getElementById(clientnum2[restutable[no]] + '-div').style.display = 'block'
+        }
+
+        function GetState() {
+            var stu = `<%= msg.stu %>`
+            console.log(stu.length)
+            console.log(stu[0])
+            console.log(stu[1])
+            for(let i = 0;i<stu.length;i++){
+                if(stuonline[stu[i].stu_no]==true){
+                    document.getElementById('stu'+i+'_state').innerHTML='online'
+                }
+                else{
+                    document.getElementById('stu'+i+'_state').innerHTML='not online'
+                }
+            }
+        }
+
         window.onload = function () {
             //var ysFixWebmDuration = ysFixWebmDuration;
             function getSeekableBlob(inputBlob, num, kind, parterName) {
@@ -96,16 +161,6 @@
                 iceServers: [{ urls: ["stun:ss-turn1.xirsys.com"] }, { username: "CEqIDkX5f51sbm7-pXxJVXePoMk_WB7w2J5eu0Bd00YpiONHlLHrwSb7hRMDDrqGAAAAAF_OT9V0dWR1d2Vi", credential: "446118be-38a4-11eb-9ece-0242ac140004", urls: ["turn:ss-turn1.xirsys.com:80?transport=udp", "turn:ss-turn1.xirsys.com:3478?transport=udp"] }]
             };
 
-            //PeerConnection
-            var pc = [];
-            var localStream = null;
-            var num = 0;
-            var mediaRecorder = [];
-            var recordChunks = [];
-            var clientnum1 = [], clientnum2 = [];
-            var recordMediaType = 'video/webm;codecs=vp8,opus';
-            var startTime = [];
-            var stutable = [];
 
             function StartRecord(stream, num) {
                 let option = { mimeType: recordMediaType };
@@ -169,7 +224,7 @@
                         let newP = document.createElement('div');
                         newP.id = `${num}-divp`;
                         newP.style.width = 900;
-                        newP.innerHTML = stutable[parterName].stu_no + '-' + stutable[parterName].stu_name;
+                        newP.innerHTML = stutable[parterName].stu_no;
                         document.getElementById(`${num}-div`).appendChild(newP);
 
                         let newVideo = document.createElement('video');
@@ -183,6 +238,8 @@
                         else
                             clientnum2[parterName] = num;
                         document.getElementById(`${num}-div`).appendChild(newVideo);
+                        document.getElementById(`${num}-div`).style.display = 'none'
+                        console.log(`hide ${num}-div`)
                         StartRecord(str, num);
                     }
                     num++;
@@ -210,14 +267,16 @@
                 socket.on('need connect', (data) => {
                     console.log("ok we connect")
                     stutable[data.sender] = data.msg;
-                    socket.emit('ok we connect', { receiver: data.sender, sender: {id:socket.id, no_id: '<%= msg.user.stu_no%>'} });
+                    stuonline[data.msg.stu_no] = true;
+                    restutable[data.msg.stu_no] = data.sender;
+                    socket.emit('ok we connect', { receiver: data.sender, sender: { id: socket.id, no_id: '<%= msg.user.stu_no%>' } });
                 });
 
                 socket.on('user disconnected', (socket_id) => {
                     console.log('disconnect : ' + socket_id);
                     StopRecord(clientnum1[socket_id], "video", socket_id);
                     StopRecord(clientnum2[socket_id], "screen", socket_id);
-                    $('#user-list li[user-id="' + socket_id + '"]').remove();
+                    stuonline[stutable[socket_id].stu_no] = false;
                 })
 
 

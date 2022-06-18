@@ -6,8 +6,8 @@
 <body>
     <h1>ChangePassword</h1>
     <form action="https://118.195.242.229:80/changepwd" onsubmit="return md5change()">
-        <p>number<input type="text" size="10" disabled="disabled" value=<%=msg.stu_no %>></p>
-        <p>grade<input type="text" size="10" disabled="disabled" value=<%=msg.stu_grade %>></p>
+        <p>number<input type="text" size="10" disabled="disabled" value=<%=msg.user.stu_no %>></p>
+        <p>grade<input type="text" size="10" disabled="disabled" value=<%=msg.user.stu_grade %>></p>
         <p>new password<input type="password" id="pwd1" size="10"></p>
         <p>confirm password<input type="password" id="pwd2" size="10"></p>
         <input type="hidden" id="name_hidden" name="name_hidden" value=<%=msg.stu_no %>>
