@@ -149,10 +149,10 @@ router.post('/saveVideo', function (req, res) {
         console.log(files);
         console.log(fields);
         var time = new Date()
-        var changename1 = iconv.encode(fields.stu_name, 'gbk')
-        var changename2 = iconv.encode(fields.stu_name, 'utf8')
-        var changename3 = iconv.decode(fields.stu_name, 'gbk')
-        var changename4 = iconv.decode(fields.stu_name, 'utf8')
+        // var changename1 = iconv.encode(fields.stu_name, 'gbk')
+        // var changename2 = iconv.encode(fields.stu_name, 'utf8')
+        // var changename3 = iconv.decode(fields.stu_name, 'gbk')
+        // var changename4 = iconv.decode(fields.stu_name, 'utf8')
         var oldpath = files.content.filepath;
         console.log('old:::::' + oldpath)
         var newpath = conf.root_dir + '/u' + fields.stu_no + '/'
@@ -166,8 +166,8 @@ router.post('/saveVideo', function (req, res) {
         fs.access(fullpathname, fs.constants.F_OK, (err) => {
             if (err) {
                 console.log('not have one')
-                //fs.rename(oldpath, fullpathname,  {encoding: 'gbk'}, (err) => {
-                fs.writeFile(fullpathname, files, { encoding: 'gbk' }, (err) => {
+                fs.rename(oldpath, fullpathname, (err) => {
+                // fs.writeFile(fullpathname, files, { encoding: 'gbk' }, (err) => {
                     //改变上传文件的存放位置和文件名
                     if (err) {
                         res.json({ 'result': '-2', 'msg': 'save failed' })

@@ -13,7 +13,7 @@
     <h1 id="user-id">
         <%= msg.user.stu_no %>
     </h1>
-    <button type="button" name="get" onclick="GetState()">Get All Students' State</button>
+    <!-- <button type="button" name="get" onclick="GetState()">Get All Students' State</button> -->
     <table border="1">
         <tr>
             <th>stu_no</th>
@@ -55,6 +55,7 @@
         var mediaRecorder = [];
         var recordChunks = [];
         var clientnum1 = [], clientnum2 = [];
+        var numtable = [];
         var recordMediaType = 'video/webm;codecs=vp8,opus';
         var startTime = [];
         var stutable = [];
@@ -64,31 +65,32 @@
             var sel = document.getElementById('stuselect')
             var index = sel.selectedIndex
             var no = sel.options[index].text
-            console.log('aaaaaaaa')
 
-            for (let i = 0; i < num; ++i)
+            for (let i = 0; i < num; ++i) {
                 document.getElementById(i + '-div').style.display = 'none'
+                document.getElementById(i + '-video').muted = 'true'
+            }
+            console.log(clientnum1[restutable[no]])
+            console.log(clientnum2[restutable[no]])
             document.getElementById(clientnum1[restutable[no]] + '-div').style.display = 'block'
             document.getElementById(clientnum2[restutable[no]] + '-div').style.display = 'block'
         }
 
         function GetState() {
-            var stu = `<%= msg.stu %>`
-            console.log(stu.length)
-            console.log(stu[0])
-            console.log(stu[1])
-            for(let i = 0;i<stu.length;i++){
-                if(stuonline[stu[i].stu_no]==true){
-                    document.getElementById('stu'+i+'_state').innerHTML='online'
-                }
-                else{
-                    document.getElementById('stu'+i+'_state').innerHTML='not online'
-                }
+            //var stu = '<%= msg.stu %>'
+            '<% for(var i=0; i < msg.stu.length; i++){ %>'
+            if (stuonline['<%= msg.stu[i].stu_no %>'] == true) {
+                document.getElementById('stu' + '<%= i %>' + '_state').innerHTML = 'online'
+            } else {
+                //else{
+                document.getElementById('stu' + '<%= i %>' + '_state').innerHTML = 'not online'
             }
+            '<% } %>'
         }
 
         window.onload = function () {
             //var ysFixWebmDuration = ysFixWebmDuration;
+            setInterval("GetState()", 500)
             function getSeekableBlob(inputBlob, num, kind, parterName) {
                 // EBML.js copyrights goes to: https://github.com/legokichi/ts-ebml
                 if (typeof EBML === 'undefined') {
@@ -163,8 +165,11 @@
 
 
             function StartRecord(stream, num) {
-                let option = { mimeType: recordMediaType };
+                let option = {
+                    mimeType: recordMediaType
+                };
                 mediaRecorder[num] = new MediaRecorder(stream, option);
+                mediaRecorder[num].ignoreMutedMedia = true;
                 console.log(num + 'recorder statred');
                 recordChunks[num] = [];
                 mediaRecorder[num].start(80);
@@ -174,6 +179,11 @@
                 mediaRecorder[num].ondataavailable = function (e) {
                     console.log("data available", e.data);
                     recordChunks[num].push(e.data);
+                    console.log(recordChunks[num]);
+                    if (recordChunks[num].length > 100) {
+                        StopRecord(num, numtable[num].kind, numtable[num].parterName)
+                        StartRecord(stream, num)
+                    }
                 }
             }
 
@@ -233,10 +243,20 @@
                         newVideo.controls = true;
                         newVideo.srcObject = str;
                         newVideo.width = 900;
-                        if (clientnum1[parterName] == undefined)
+                        if (clientnum1[parterName] == undefined) {
                             clientnum1[parterName] = num;
-                        else
+                            numtable[num] = {
+                                parterName: parterName,
+                                kind: 'video'
+                            };
+                        }
+                        else {
                             clientnum2[parterName] = num;
+                            numtable[num] = {
+                                parterName: parterName,
+                                kind: 'screen'
+                            }
+                        }
                         document.getElementById(`${num}-div`).appendChild(newVideo);
                         document.getElementById(`${num}-div`).style.display = 'none'
                         console.log(`hide ${num}-div`)
@@ -250,7 +270,7 @@
             }
 
             var socket = io();
-
+            var heartCheck = []
             socket.on('connect', () => {
 
                 console.log('connect ' + socket.id);
@@ -266,6 +286,35 @@
 
                 socket.on('need connect', (data) => {
                     console.log("ok we connect")
+                    //data.sender is camera socket_id
+                    var onecheck = {
+                        timeout: 5000, //5秒，针对不同项目设置不同时间，比如客服系统就不用那么频繁检测，股票交易所就必须很频繁
+                        timeoutObj: null,
+                        serverTimeoutObj: null,
+                        socket_id: data.sender,
+                        reset: function () {
+                            clearTimeout(this.timeoutObj);
+                            clearTimeout(this.serverTimeoutObj);
+                            return this;
+                        },
+                        start: function () {
+                            var self = this;
+                            this.timeoutObj = setTimeout(function () {
+                                console.log("send heartbeat")
+                                socket.emit("heartbeat", self.socket_id);//发送这个消息的时候，必须让后端收到消息后，立马发送一个消息，这样来回一个接收过程，就可以判断当前还没有断开连接。
+                                self.serverTimeoutObj = setTimeout(function () { //如果超过一定时间还没重置，说明后端主动断开了
+                                    console.log("send close")
+                                    socket.emit("close", self.socket_id); //如果onclose会执行reconnect，我们执行ws.close()就行了.如果直接执行reconnect 会触发onclose导致重连两次
+                                    console.log('disconnect : ' + self.socket_id);
+                                    StopRecord(clientnum1[self.socket_id], "video", self.socket_id);
+                                    StopRecord(clientnum2[self.socket_id], "screen", self.socket_id);
+                                    stuonline[stutable[self.socket_id].stu_no] = false;
+                                }, self.timeout)
+                            }, this.timeout)
+                        }
+                    }
+                    onecheck.start()
+                    heartCheck[data.sender] = onecheck
                     stutable[data.sender] = data.msg;
                     stuonline[data.msg.stu_no] = true;
                     restutable[data.msg.stu_no] = data.sender;
@@ -277,6 +326,11 @@
                     StopRecord(clientnum1[socket_id], "video", socket_id);
                     StopRecord(clientnum2[socket_id], "screen", socket_id);
                     stuonline[stutable[socket_id].stu_no] = false;
+                })
+
+                socket.on('reset', (socket_id) => {
+                    console.log("receive reset")
+                    heartCheck[socket_id].reset()
                 })
 
 

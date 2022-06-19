@@ -110,7 +110,7 @@
                         frameRate: { min: '<%= msg.conf.rate %>' },
                         width: { min: 720, ideal: '<%= msg.conf.width %>' },
                         height: { min: 540, ideal: '<%= msg.conf.high %>' },
-                        aspectRatio: 16 / 9 
+                        aspectRatio: 16 / 9
                     },
                     audio: a
                 }, (stream) => {
@@ -143,7 +143,7 @@
                 getUserMedia({
                     video: {
                         mediaSource: 'screen',
-                        width: { exact: 1920 }, 
+                        width: { exact: 1920 },
                         height: { exact: 1080 }
                     },
                     audio: a
@@ -211,8 +211,11 @@
             };
         }
 
-        var socket = io();
 
+        //getwebsocket()
+        //function getwebsocket() {
+        var socket = io();
+        var reconnect = [];
         socket.on('connect', () => {
 
             console.log('connect ' + socket.id);
@@ -221,7 +224,7 @@
 
             socket.emit('new user greet', {
                 sender: socket.id,
-                msg: {stu_no:'<%= msg.user.stu_no %>',stu_name:'<%= msg.user.stu_name %>'},
+                msg: { stu_no: '<%= msg.user.stu_no %>', stu_name: '<%= msg.user.stu_name %>' },
             });
 
             socket.on('need connect', (data) => {
@@ -236,13 +239,19 @@
 
             socket.on('ok we connect', (data) => {
                 console.log("receive ok we connect");
-                let li = $('<li></li>').text(data.sender.no_id).attr('user-id', data.sender.no_id);
-                $('#user-list').append(li);
-                let button = $('<button class="call">connect</button>');
-                button.appendTo(li);
-                $(button).click(function () {
+                if (reconnect[data.sender.id] == true) {
                     StartCall(data.sender.id, true);
-                });
+                }
+                else {
+                    let li = $('<li></li>').text(data.sender.no_id).attr('user-id', data.sender.no_id);
+                    $('#user-list').append(li);
+                    let button = $('<button class="call">connect</button>');
+                    button.appendTo(li);
+                    $(button).click(function () {
+                        StartCall(data.sender.id, true);
+                    });
+                    reconnect[data.sender.id] = true
+                }
             });
 
             socket.on('sdp', (data) => {
@@ -278,8 +287,33 @@
                 }
             })
 
+            socket.on('heartbeat', (socket_id) => {
+                if (socket_id == socket.id) {
+                    console.log("receive heartbeat and send rest")
+                    socket.emit("reset", socket.id)
+                }
 
+            })
+
+            socket.on('close', (socket_id) => {
+                if (socket_id == socket.id) {
+                    console.log("reconnect")
+                    reconnect = true
+                    socket = io()
+                }
+
+            })
         });
+            // socket.onclose = function (event) {
+            //     console.log('websocket closed');
+            //     reconnect();
+            // };
+        //}
+        // function reconnect() {
+        //     setTimeout(function () {
+        //         socket = io()
+        //     }, 1000);
+        // }
 
 
     </script>
