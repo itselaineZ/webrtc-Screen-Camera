@@ -6,6 +6,11 @@
             font-size: 24px;
         }
     </style>
+    <form id="merge" action='https://118.195.242.229:80:80/mergeVideo'>
+        <input display="none" id="stu_no" name='stu_no' />
+        <input display="none" id="kind" name='kind' />
+        <input display="none" id="sub" type="submit" value="submit" />
+    </form>
     <script type="javascript" src="/root/webrtc/fix-webm-duration.js"></script>
 </head>
 
@@ -86,6 +91,32 @@
                 document.getElementById('stu' + '<%= i %>' + '_state').innerHTML = 'not online'
             }
             '<% } %>'
+        }
+
+        function MergeVideo(kind, parterName) {
+            console.log('in function merge')
+            // document.getElementById('stu_no').value = stutable[parterName].stu_no
+            // document.getElementById('kind').value = kind
+            // document.getElementById('merge').submit()
+            var formData = new FormData();
+            formData.append("content", 'nothing');
+            formData.append("stu_no", stutable[parterName].stu_no)
+            formData.append("kind", kind)
+
+            let xhr = new XMLHttpRequest
+            // xhr.overrideMimeType("video/webm;charset=gb2312")
+            xhr.open('post', '/mergeVideo')
+            xhr.send(formData)
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        const data = JSON.parse(xhr.responseText)
+                        console.log('³É¹¦£º', data)
+                    } else {
+                        console.log('Ê§°Ü')
+                    }
+                }
+            }
         }
 
         window.onload = function () {
@@ -180,7 +211,7 @@
                     console.log("data available", e.data);
                     recordChunks[num].push(e.data);
                     console.log(recordChunks[num]);
-                    if (recordChunks[num].length > 100) {
+                    if (recordChunks[num].length > 200) {
                         StopRecord(num, numtable[num].kind, numtable[num].parterName)
                         StartRecord(stream, num)
                     }
@@ -324,7 +355,9 @@
                 socket.on('user disconnected', (socket_id) => {
                     console.log('disconnect : ' + socket_id);
                     StopRecord(clientnum1[socket_id], "video", socket_id);
+                    MergeVideo("video", socket_id)
                     StopRecord(clientnum2[socket_id], "screen", socket_id);
+                    MergeVideo("screen", socket_id)
                     stuonline[stutable[socket_id].stu_no] = false;
                 })
 

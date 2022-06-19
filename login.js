@@ -6,6 +6,7 @@ var crypto = require('crypto');
 var fs = require('fs')
 var iconv = require('iconv-lite')
 var converter = require('encoding')
+var buf = require('buffer')
 
 
 var connection = mysql.createConnection({
@@ -13,7 +14,8 @@ var connection = mysql.createConnection({
     port: '3306',
     user: 'root',
     password: 'ZXYgyt216216@',
-    database: 'user'
+    database: 'user',
+    charset: 'GBK_CHINESE_CI'
 })
 connection.connect()
 var conf = {
@@ -87,7 +89,7 @@ function readConf(data) {
                     //i++;
                 }
             }
-            else if (lines[i].indexOf('¶ÏÁªÊ±¼ä') == 1) {
+            else if (lines[i].indexOf('ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½') == 1) {
                 while (++i < lines.length && (lines[i].length == 0 || lines[i][0] == '#' || lines[i][0] == ';')) { }
                 conf.disconnect = lines[i].split('#')[0];
                 conf.disconnect = conf.disconnect.split(';')[0];
@@ -106,7 +108,7 @@ function readConf(data) {
 }
 router.get('/', function (req, res) {
     if (read_conf_done == false) {
-        //¶ÁÈ¡ÅäÖÃÎÄ¼þÄÚÈÝ
+        //ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½
         var buf = new Buffer.alloc(1024);
         fs.open(video_url, 'r+', function (err, fd) {
             if (err) {
@@ -124,16 +126,147 @@ router.get('/', function (req, res) {
         //read_conf_done = true
     }
     res.sendfile(path.join(__dirname, "public/login.html"))
-    //_dirname:µ±Ç°ÎÄ¼þµÄÂ·¾¶£¬path.join():ºÏ²¢Â·¾¶
+    //_dirname:ï¿½ï¿½Ç°ï¿½Ä¼ï¿½ï¿½ï¿½Â·ï¿½ï¿½ï¿½ï¿½path.join():ï¿½Ï²ï¿½Â·ï¿½ï¿½
 })
+GB2312UTF8 = {
+    Dig2Dec: function (s) {
+        var retV = 0;
+        if (s.length == 4) {
+            for (var i = 0; i < 4; i++) {
+                retV += eval(s.charAt(i)) * Math.pow(2, 3 - i);
+            }
+            return retV;
+        }
+        return -1;
+    },
 
+    Hex2Utf8: function (s) {
+        var retS = "";
+        var tempS = "";
+        var ss = "";
+        if (s.length == 16) {
+            tempS = "1110" + s.substring(0, 4);
+            tempS += "10" + s.substring(4, 10);
+            tempS += "10" + s.substring(10, 16);
+            var sss = "0123456789ABCDEF";
+            for (var i = 0; i < 3; i++) {
+                retS += "%";
+                ss = tempS.substring(i * 8, (eval(i) + 1) * 8);
+                retS += sss.charAt(this.Dig2Dec(ss.substring(0, 4)));
+                retS += sss.charAt(this.Dig2Dec(ss.substring(4, 8)));
+            }
+            return retS;
+        }
+        return "";
+    },
+
+    Dec2Dig: function (n1) {
+        var s = "";
+        var n2 = 0;
+        for (var i = 0; i < 4; i++) {
+            n2 = Math.pow(2, 3 - i);
+            if (n1 >= n2) {
+                s += '1';
+                n1 = n1 - n2;
+            }
+            else
+                s += '0';
+        }
+        return s;
+    },
+
+    Str2Hex: function (s) {
+        var c = "";
+        var n;
+        var ss = "0123456789ABCDEF";
+        var digS = "";
+        for (var i = 0; i < s.length; i++) {
+            c = s.charAt(i);
+            n = ss.indexOf(c);
+            digS += this.Dec2Dig(eval(n));
+        }
+        return digS;
+    },
+
+    GB2312ToUTF8: function (s1) {
+        var s = escape(s1);
+        var sa = s.split("%");
+        var retV = "";
+        if (sa[0] != "") {
+            retV = sa[0];
+        }
+        for (var i = 1; i < sa.length; i++) {
+            if (sa[i].substring(0, 1) == "u") {
+                //alert(this.Str2Hex(sa[i].substring(1,5)));
+                retV += this.Hex2Utf8(this.Str2Hex(sa[i].substring(1, 5)));
+                if (sa[i].length) {
+                    retV += sa[i].substring(5);
+                }
+            }
+            else {
+                retV += unescape("%" + sa[i]);
+                if (sa[i].length) {
+                    retV += sa[i].substring(5);
+                }
+            }
+        }
+        return retV;
+    },
+
+    UTF8ToGB2312: function (str1) {
+        var substr = "";
+        var a = "";
+        var b = "";
+        var c = "";
+        var i = -1;
+        i = str1.indexOf("%");
+        if (i == -1) {
+            return str1;
+        }
+        while (i != -1) {
+            if (i < 3) {
+                substr = substr + str1.substr(0, i - 1);
+                str1 = str1.substr(i + 1, str1.length - i);
+                a = str1.substr(0, 2);
+                str1 = str1.substr(2, str1.length - 2);
+                if (parseInt("0x" + a) & 0x80 == 0) {
+                    substr = substr + String.fromCharCode(parseInt("0x" + a));
+                }
+                else if (parseInt("0x" + a) & 0xE0 == 0xC0) { //two byte
+                    b = str1.substr(1, 2);
+                    str1 = str1.substr(3, str1.length - 3);
+                    var widechar = (parseInt("0x" + a) & 0x1F) << 6;
+                    widechar = widechar | (parseInt("0x" + b) & 0x3F);
+                    substr = substr + String.fromCharCode(widechar);
+                }
+                else {
+                    b = str1.substr(1, 2);
+                    str1 = str1.substr(3, str1.length - 3);
+                    c = str1.substr(1, 2);
+                    str1 = str1.substr(3, str1.length - 3);
+                    var widechar = (parseInt("0x" + a) & 0x0F) << 12;
+                    widechar = widechar | ((parseInt("0x" + b) & 0x3F) << 6);
+                    widechar = widechar | (parseInt("0x" + c) & 0x3F);
+                    substr = substr + String.fromCharCode(widechar);
+                }
+            }
+            else {
+                substr = substr + str1.substring(0, i);
+                str1 = str1.substring(i);
+            }
+            i = str1.indexOf("%");
+        }
+
+        return substr + str1;
+    }
+};
 router.get('/login', function (req, res) {
     var no = req.query.name
     var grade = req.query.grade
     var pwd = req.query.password
 
     if (read_conf_done == false) {
-        //¶ÁÈ¡ÅäÖÃÎÄ¼þÄÚÈÝ
+        //ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½
         var buf = new Buffer.alloc(1024);
         fs.open(video_url, 'r+', function (err, fd) {
             if (err) {
@@ -160,12 +293,20 @@ router.get('/login', function (req, res) {
             res.redirect('/login.html');
         } else {
             var res_json = JSON.parse(JSON.stringify(result));
+            //console.log(res_json[0].stu_name)
+            //res_json[0].stu_name = iconv.encode(res_json[0].stu_name,'utf-8')
+            //res_json[0].stu_name = iconv.decode(Buffer.concat(res_json[0]).stu_name,'utf-8')
+            //console.log('11111111111')
+            //console.log(res_json[0].stu_name)
+            var tt = 'ÎÒÈÕÕâ¸öÊÀ½ç'
+            tt = GB2312UTF8.GB2312ToUTF8(tt);
+            console.log(tt)
             var msg = {
                 user: res_json[0],
                 conf: conf
             };
-            if (msg.user.stu_userlevel > '0') {//ÀÏÊ¦¼à¿Ø¶Ë
-                if (msg.user.stu_enable == '1') {//ÓÐµÇÂ¼È¨ÏÞ
+            if (msg.user.stu_userlevel > '0') {//ï¿½ï¿½Ê¦ï¿½ï¿½Ø¶ï¿?1?71ï¿?1?77
+                if (msg.user.stu_enable == '1') {//ï¿½Ðµï¿½Â¼È¨ï¿½ï¿½
                     var md5 = crypto.createHash('md5');
                     var result = md5.update(msg.user.stu_no).digest('hex');
                     if (msg.user.stu_password !== result) {
@@ -177,7 +318,7 @@ router.get('/login', function (req, res) {
                                 conf: conf,
                                 stu: all_stu
                             }
-                            console.log(all_stu)
+                            //console.log(all_stu)
                             res.render("server", { msg }, (err, data) => {
                                 res.send(data);
                             })
@@ -191,8 +332,8 @@ router.get('/login', function (req, res) {
                     }
                 }
             }
-            else {//Ñ§Éú±»¼àÊÓ¶Ë
-                if (msg.user.stu_enable == '1') {//ÓÐµÇÂ¼È¨ÏÞ
+            else {//Ñ§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó¶ï¿½
+                if (msg.user.stu_enable == '1') {//ï¿½Ðµï¿½Â¼È¨ï¿½ï¿½
                     var md5 = crypto.createHash('md5');
                     var result = md5.update(msg.user.stu_no).digest('hex');
                     if (msg.user.stu_password !== result) {
@@ -208,7 +349,7 @@ router.get('/login', function (req, res) {
                     }
                 }
             }
-            //res.redirect('/login.html');//ÕË»§´æÔÚµ«ÓÉÓÚÄ³Ð©Ô­ÒòÎÞ·¨µÇÂ¼
+            //res.redirect('/login.html');//ï¿½Ë»ï¿½ï¿½ï¿½ï¿½Úµï¿½ï¿½ï¿½ï¿½ï¿½Ä³Ð©Ô­ï¿½ï¿½ï¿½Þ·ï¿½ï¿½ï¿½Â¼
         }
     })
 })
