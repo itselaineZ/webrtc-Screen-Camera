@@ -66,6 +66,11 @@ io.on("connection", (socket) => {
         socket.broadcast.emit('user disconnected', socket.id);
     });
 
+    socket.on("reset", () => {
+        //console.log("index reset: " + socket.id);
+        socket.broadcast.emit('user reset', socket.id);
+    });
+
     socket.on("chat message", (msg) => {
         console.log(socket.id + " say: " + msg);
         //io.emit("chat message", msg);

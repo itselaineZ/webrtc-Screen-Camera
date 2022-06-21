@@ -5,7 +5,6 @@ var path = require('path');
 var router = express.Router();
 var mysql = require('mysql');
 var iconv = require('iconv-lite')
-var ffmpeg = require('fluent-ffmpeg');
 var shell = require('shelljs');
 
 var connection = mysql.createConnection({
@@ -118,48 +117,55 @@ function mkdirsSync(dirname) {
     }
 }
 
-function runFFmpegCombine_Webm(file, file2, outPath) {
-    console.log('here5')
-    console.log(file)
-    console.log(file2)
-    try {
-        var proc = ffmpeg(file);
-        console.log('here6')
-        proc = proc.input(file2);
-        console.log('here7')
-        proc.mergeToFile('/root/aaaa.webm').on('end', function () {
-            console.log('video merge success');
-        });
-    } catch (err) {
-        console.log('an error occured!', err);
-    }
-}
-function runFFmpegCombine_Webm1(txtfile, outPath) {
-    console.log('ffmpeg -f concat -safe 0 -y -i ' + txtfile + ' -c copy ' + outPath)
-    if (shell.exec('ffmpeg -f concat -safe 0 -y -i ' + txtfile + ' -c copy ' + outPath).code !== 0) {
-        shell.echo('Error:merge failed');
-        shell.exit(1);
-    }
-    const data = fs.readFileSync(txtfile, { flag: 'r' })
-    console.log(data)
-    var lines = data.split('\n')
-    for (let i = 0; i < lines.length; i++) {
-        console.log(lines[i])
-        let filepath = lines[i].split(' ')[1]
-        filepath = lines[i].split('\'')[0]
-        console.log('rm -f ' + filepath)
-        if (shell.exec('rm -f ' + filepath).code !== 0) {
-            shell.echo('Error: '+filepath + ' delete failed');
-            shell.exit(1);
+function runFFmpegCombine_Webm(txtfile, outPath, mp4Path) {
+    console.log('ffmpeg -f concat -safe 0 -y -i ' + txtfile + ' -c copy ' + outPath + '\n')
+    let shells = '#!/bin/bash\nffmpeg -f concat -safe 0 -y -i ' + txtfile + ' -c copy ' + outPath + '\n'
+    //shells = shells + 'ffmpeg -i ' + outPath + ' -max_muxing_queue_size 10240 '+ mp4Path + '\n'
+    const files = fs.readFileSync(txtfile, { flag: 'r' })
+    var buf = new Buffer.alloc(102400);
+    fs.open(txtfile, 'r+', function (err, fd) {
+        if (err) {
+            return console.error(err);
         }
-    }
-    console.log('rm -f ' + txtfile)
-    if (shell.exec('rm -f ' + txtfile).code !== 0) {
-        shell.echo('Error: txt file delete failed');
-        shell.exit(1);
-    }
+        fs.read(fd, buf, 0, buf.length, 0, function (err, bytes) {
+            if (err) {
+                console.log(err);
+            }
+            var files = buf.slice(0, bytes).toString();
+
+            var lines = files.split('\n')
+            for (let i = 0; i < lines.length; i++) {
+                let filepath = lines[i].split(' ')[1]
+                if (filepath) {
+                    filepath = filepath.split("\'")[1]
+                    console.log('rm -rf ' + filepath)
+                    shells = shells + 'rm -rf ' + filepath + '\n'
+                }
+            }
+            console.log('rm -rf ' + txtfile)
+            shells = shells + 'rm -rf ' + txtfile + '\n'
+
+            let buffer = new Buffer.from(shells)
+            fs.open('./shell.sh', 'a', function (err, fd) {
+                if (err) {
+                    console.log('Cant open file');
+                } else {
+                    fs.write(fd, buffer, 0, buffer.length,
+                        null, function (err, writtenbytes) {
+                            if (err) {
+                                console.log('Cant write to file');
+                            } else {
+                                console.log(writtenbytes + ' characters added to shell file');
+                                shell.exec('sh shell.sh')
+                                console.log('rm -f ./shell.sh')
+                                shell.exec('rm -f ./shell.sh')
+                            }
+                        })
+                }
+            })
+        });
+    });
 }
-var videoname = []
 router.post('/saveVideo', function (req, res) {
     //读取配置文件内容
     var buf = new Buffer.alloc(1024);
@@ -178,8 +184,6 @@ router.post('/saveVideo', function (req, res) {
     });
 
     console.log(path.join(__dirname, '../'))
-    //console.log(request)
-    //const form=new formidable.IncomingForm({uploadDir:"/root"});
     const form = formidable({
         uploadDir: path.join(__dirname, '../'), // 上传文件放置的目录
         keepExtensions: true,           //包含源文件的扩展名
@@ -213,8 +217,6 @@ router.post('/saveVideo', function (req, res) {
             if (err) {
                 console.log('not have one')
                 fs.rename(oldpath, fullpathname, (err) => {
-                    // fs.writeFile(fullpathname, files, { encoding: 'gbk' }, (err) => {
-                    //改变上传文件的存放位置和文件名
                     if (err) {
                         res.json({ 'result': '-2', 'msg': 'save failed' })
                     }
@@ -222,13 +224,6 @@ router.post('/saveVideo', function (req, res) {
                 })
             } else {
                 console.log('already have')
-                // fs.appendFile(fullpathname, files, function (err) {
-                //     if (err) {
-                //         console.log(err)
-                //     } else {
-                //         console.log('append file success!')
-                //     }
-                // })
             }
         })
         var txtpath = newpath + '/u' + fields.stu_no + '-' + fields.kind + '.txt'
@@ -248,37 +243,6 @@ router.post('/saveVideo', function (req, res) {
                     })
             }
         })
-        // if (videoname[fields.stu_no]) {
-        //     if (fields.kind == 'video') {
-        //         console.log('here1')
-        //         if (videoname[fields.stu_no].video) {
-        //             console.log('here2')
-        //             runFFmpegCombine_Webm(videoname[fields.stu_no].video, fullpathname, fullpathname)
-        //         }
-        //         videoname[fields.stu_no].video = fullpathname
-        //     }
-        //     else {
-        //         console.log('here3')
-        //         if (videoname[fields.stu_no].screen) {
-        //             console.log('here4')
-        //             runFFmpegCombine_Webm(videoname[fields.stu_no].screen, fullpathname, fullpathname)
-        //         }
-        //         videoname[fields.stu_no].screen = fullpathname
-        //     }
-        // }
-        // else {
-        //     let name_con = {
-        //         video: null,
-        //         screen: null
-        //     }
-        //     if (fields.kind == 'video') {
-        //         name_con.video = fullpathname
-        //     }
-        //     else {
-        //         name_con.screen = fullpathname
-        //     }
-        //     videoname[fields.stu_no] = name_con
-        // }
     })
 })
 router.post('/mergeVideo', function (req, res) {
@@ -300,7 +264,6 @@ router.post('/mergeVideo', function (req, res) {
             if (err) {
                 return console.error(err);
             }
-            console.log("prepare reading conf file......");
             fs.read(fd, buf, 0, buf.length, 0, function (err, bytes) {
                 if (err) {
                     console.log(err);
@@ -312,9 +275,11 @@ router.post('/mergeVideo', function (req, res) {
         var time = new Date()
         var txtpath = conf.root_dir + '/u' + stu_no + '/u' + stu_no + '-' + kind + '.txt'
         var outPath = conf.root_dir + '/u' + stu_no + '/u' + stu_no + '-' + kind + '-' +
-            time.getFullYear() + '-' + time.getMonth() + '-' + time.getDate() + '-' + time.getHours() + '-' + time.getMinutes() + '-' + time.getSeconds() + '.webm'
-        console.log('new:::::' + outPath);
-        runFFmpegCombine_Webm1(txtpath, outPath)
+            time.getFullYear() + '-' + time.getMonth() + '-' + time.getDate() + '-' + time.getHours() + '-' + time.getMinutes() + '-' + time.getSeconds() + '-1.webm'
+        var mp4Path = conf.root_dir + '/u' + stu_no + '/u' + stu_no + '-' + kind + '-' +
+        time.getFullYear() + '-' + time.getMonth() + '-' + time.getDate() + '-' + time.getHours() + '-' + time.getMinutes() + '-' + time.getSeconds() + '.mp4'
+            console.log('new:::::' + outPath);
+        runFFmpegCombine_Webm(txtpath, outPath,mp4Path)
     })
 
 })

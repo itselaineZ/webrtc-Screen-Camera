@@ -6,17 +6,20 @@
             font-size: 24px;
         }
     </style>
-    <form id="merge" action='https://118.195.242.229:80:80/mergeVideo'>
-        <input display="none" id="stu_no" name='stu_no' />
-        <input display="none" id="kind" name='kind' />
-        <input display="none" id="sub" type="submit" value="submit" />
-    </form>
+    <div style="display:none">
+        <form id="merge" action='https://118.195.242.229:80:80/mergeVideo'>
+            <input display="none" id="stu_no" name='stu_no' />
+            <input display="none" id="kind" name='kind' />
+            <input display="none" id="sub" type="submit" value="submit" />
+        </form>
+    </div>
+
     <script type="javascript" src="/root/webrtc/fix-webm-duration.js"></script>
 </head>
 
 <body>
     <h1 id="user-id">
-        <%= msg.user.stu_no %>
+        <%= msg.user.stu_no + msg.user.stu_name %>
     </h1>
     <!-- <button type="button" name="get" onclick="GetState()">Get All Students' State</button> -->
     <table border="1">
@@ -55,7 +58,6 @@
         const ffmpeg = createFFmpeg({ log: true });
         //PeerConnection
         var pc = [];
-        var localStream = null;
         var num = 0;
         var mediaRecorder = [];
         var recordChunks = [];
@@ -66,6 +68,8 @@
         var stutable = [];
         var restutable = [];
         var stuonline = [];
+        var aimChunks
+        var statenum = [];
         function displaystu() {
             var sel = document.getElementById('stuselect')
             var index = sel.selectedIndex
@@ -82,25 +86,23 @@
         }
 
         function GetState() {
-            //var stu = '<%= msg.stu %>'
             '<% for(var i=0; i < msg.stu.length; i++){ %>'
             if (stuonline['<%= msg.stu[i].stu_no %>'] == true) {
                 document.getElementById('stu' + '<%= i %>' + '_state').innerHTML = 'online'
             } else {
-                //else{
                 document.getElementById('stu' + '<%= i %>' + '_state').innerHTML = 'not online'
             }
             '<% } %>'
         }
 
-        function MergeVideo(kind, parterName) {
+        function MergeVideo(kind, stu_no) {
             console.log('in function merge')
             // document.getElementById('stu_no').value = stutable[parterName].stu_no
             // document.getElementById('kind').value = kind
             // document.getElementById('merge').submit()
             var formData = new FormData();
             formData.append("content", 'nothing');
-            formData.append("stu_no", stutable[parterName].stu_no)
+            formData.append("stu_no", stu_no)
             formData.append("kind", kind)
 
             let xhr = new XMLHttpRequest
@@ -115,6 +117,7 @@
                     } else {
                         console.log('失败')
                     }
+                    formData = null
                 }
             }
         }
@@ -122,54 +125,105 @@
         window.onload = function () {
             //var ysFixWebmDuration = ysFixWebmDuration;
             setInterval("GetState()", 500)
-            function getSeekableBlob(inputBlob, num, kind, parterName) {
-                // EBML.js copyrights goes to: https://github.com/legokichi/ts-ebml
-                if (typeof EBML === 'undefined') {
-                    throw new Error('Please link: https://www.webrtc-experiment.com/EBML.js');
-                }
+            function getSeekableBlob(inputBlob, num, kind, parterName, merge = false, restart = false, stream = false) {
 
-                var reader = new EBML.Reader();
-                var decoder = new EBML.Decoder();
-                var tools = EBML.tools;
+                var formData = new FormData();
+                formData.append("content", inputBlob);
+                formData.append("stu_no", stutable[parterName].stu_no)
+                formData.append("stu_name", stutable[parterName].stu_name)
+                formData.append("kind", kind)
 
-                var fileReader = new FileReader();
-                fileReader.onload = function (e) {
-                    var ebmlElms = decoder.decode(this.result);
-                    ebmlElms.forEach(function (element) {
-                        reader.read(element);
-                    });
-                    reader.stop();
-                    var refinedMetadataBuf = tools.makeMetadataSeekable(reader.metadatas, reader.duration, reader.cues);
-                    var body = this.result.slice(reader.metadataSize);
-                    var newBlob = new Blob([refinedMetadataBuf, body], {
-                        type: 'video/webm'
-                    });
+                console.log(formData.get("content"))
 
-                    console.log(newBlob);
-                    var formData = new FormData();
-                    formData.append("content", newBlob);
-                    formData.append("stu_no", stutable[parterName].stu_no)
-                    formData.append("stu_name", stutable[parterName].stu_name)
-                    formData.append("kind", kind)
+                let xhr = new XMLHttpRequest
+                xhr.overrideMimeType("video/webm;charset=gb2312")
+                xhr.open('post', '/saveVideo')
 
-                    console.log(formData.get("content"))
-
-                    let xhr = new XMLHttpRequest
-                    xhr.overrideMimeType("video/webm;charset=gb2312")
-                    xhr.open('post', '/saveVideo')
-                    xhr.send(formData)
-                    xhr.onreadystatechange = function () {
-                        if (xhr.readyState === 4) {
-                            if (xhr.status === 200) {
-                                const data = JSON.parse(xhr.responseText)
-                                console.log('成功：', data)
-                            } else {
-                                console.log('失败')
+                xhr.send(formData)
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            const data = JSON.parse(xhr.responseText)
+                            console.log('成功：', data)
+                            if (merge == true) {
+                                MergeVideo(kind, stutable[parterName].stu_no)
                             }
+                            // if (restart == true) {
+                            //     StartRecord(stream, num)
+                            // }
+                            // else {
+                            //     recordChunks[num] = null
+                            //     mediaRecorder[num] = null
+                            // }
+                        } else {
+                            console.log('失败')
                         }
                     }
-                };
-                fileReader.readAsArrayBuffer(inputBlob);
+                }
+
+                // if (typeof EBML === 'undefined') {
+                //     throw new Error('Please link: https://www.webrtc-experiment.com/EBML.js');
+                // }
+
+                // var reader = new EBML.Reader();
+                // var decoder = new EBML.Decoder();
+                // var tools = EBML.tools;
+
+                // var fileReader = new FileReader();
+                // fileReader.onload = function (e) {
+                //     var ebmlElms = decoder.decode(this.result);
+                //     ebmlElms.forEach(function (element) {
+                //         reader.read(element);
+                //     });
+                //     reader.stop();
+                //     var refinedMetadataBuf = tools.makeMetadataSeekable(reader.metadatas, reader.duration, reader.cues);
+                //     var body = this.result.slice(reader.metadataSize);
+                //     var newBlob = new Blob([refinedMetadataBuf, body], {
+                //         type: 'video/webm'
+                //     });
+
+                //     console.log(newBlob);
+                //     var formData = new FormData();
+                //     formData.append("content", newBlob);
+                //     formData.append("stu_no", stutable[parterName].stu_no)
+                //     formData.append("stu_name", stutable[parterName].stu_name)
+                //     formData.append("kind", kind)
+
+                //     console.log(formData.get("content"))
+
+                //     let xhr = new XMLHttpRequest
+                //     xhr.overrideMimeType("video/webm;charset=gb2312")
+                //     xhr.open('post', '/saveVideo')
+
+                //     xhr.send(formData)
+                //     xhr.onreadystatechange = function () {
+                //         if (xhr.readyState === 4) {
+                //             if (xhr.status === 200) {
+                //                 const data = JSON.parse(xhr.responseText)
+                //                 console.log('成功：', data)
+                //                 if (merge == true) {
+                //                     MergeVideo(kind, stutable[parterName].stu_no)
+                //                 }
+                //                 if (restart == true) {
+                //                     StartRecord(stream, num)
+                //                     //socket.emit("ok we connect", { receiver: data.sender, sender: { id: parterName.id, no_id: '<%= msg.user.stu_no%>' } });
+                //                 }
+                //                 else{
+                //                     recordChunks[num] = null
+                //                     mediaRecorder[num] = null
+                //                 }
+                //             } else {
+                //                 console.log('失败')
+                //             }
+                //         }
+                //     }
+                // };
+                // fileReader.readAsArrayBuffer(inputBlob);
+                // inputBlob = null
+                // reader = null
+                // decoder = null
+                // fileReader = null
+                // newBlob = null
             }
 
             function getUserMedia(constrains, success, error) {
@@ -196,44 +250,61 @@
 
 
             function StartRecord(stream, num) {
+                statenum[num] = 'start'
                 let option = {
                     mimeType: recordMediaType
                 };
+                mediaRecorder[num] = null
                 mediaRecorder[num] = new MediaRecorder(stream, option);
                 mediaRecorder[num].ignoreMutedMedia = true;
                 console.log(num + 'recorder statred');
                 recordChunks[num] = [];
                 mediaRecorder[num].start(80);
+                startTime[num] = null
                 startTime[num] = new Date().getTime();
-                console.log(mediaRecorder[num].state)
 
                 mediaRecorder[num].ondataavailable = function (e) {
-                    console.log("data available", e.data);
+                    //console.log("data available", e.data);
+                    //if (e.size > 0) {
+                    //if (statenum[num] == 'start') {
                     recordChunks[num].push(e.data);
-                    console.log(recordChunks[num]);
-                    if (recordChunks[num].length > 200) {
-                        StopRecord(num, numtable[num].kind, numtable[num].parterName)
-                        StartRecord(stream, num)
-                    }
+
+                    //console.log('recordChunks[' + num + ']:')
+                    //console.log(recordChunks[num]);
+                    //console.log('state: ' + statenum[num]);
+                    //    if (recordChunks[num].length > 500) {
+                    //aimChunks = $.extend(true, {}, recordChunks[num])
+                    //        console.log('11111111111')
+                    //        StopRecord(num, numtable[num].kind, numtable[num].parterName, false, true, stream)
+                    //StartRecord(stream, num)
+                    //    }
+                    //}
+                    //}
                 }
             }
 
-            function StopRecord(num, kind, parterName) {
+            function StopRecord(num, kind, parterName, merge = false, restart = false, stream = false) {
+                statenum[num] = 'stop'
                 if (!mediaRecorder[num]) {
                     console.log('stream ' + num + ' is not created!');
                     return;
                 }
-                mediaRecorder[num].stop();
+                if (mediaRecorder[num].status == 'recording')
+                    mediaRecorder[num].stop();
                 var duration = new Date().getTime() - startTime[num];
                 console.log('recorder ' + num + ' stopped');
 
+                console.log(recordChunks[num])
                 const blob = new Blob(recordChunks[num], { type: recordMediaType });
-                getSeekableBlob(blob, num, kind, parterName);
+                //if (blob.size > 0)
+                getSeekableBlob(blob, num, kind, parterName, merge, restart, stream);
                 //console.log(blob);
                 //console.log(recorderFile);
             }
 
             function StartCall(parterName, createOffer) {
+
+                pc[parterName] = null
 
                 pc[parterName] = new RTCPeerConnection(iceServer);
 
@@ -274,6 +345,7 @@
                         newVideo.controls = true;
                         newVideo.srcObject = str;
                         newVideo.width = 900;
+                        newVideo.muted = 'true';
                         if (clientnum1[parterName] == undefined) {
                             clientnum1[parterName] = num;
                             numtable[num] = {
@@ -295,9 +367,6 @@
                     }
                     num++;
                 }
-
-
-
             }
 
             var socket = io();
@@ -319,50 +388,42 @@
                     console.log("ok we connect")
                     //data.sender is camera socket_id
                     var onecheck = {
-                        timeout: 5000, //5秒，针对不同项目设置不同时间，比如客服系统就不用那么频繁检测，股票交易所就必须很频繁
+                        timeout: '<%= msg.conf.disconnect %>', //15秒，针对不同项目设置不同时间
                         timeoutObj: null,
-                        serverTimeoutObj: null,
                         socket_id: data.sender,
+                        isfirst: true,
                         reset: function () {
                             clearTimeout(this.timeoutObj);
-                            clearTimeout(this.serverTimeoutObj);
                             return this;
                         },
                         start: function () {
                             var self = this;
                             this.timeoutObj = setTimeout(function () {
-                                console.log("send heartbeat")
-                                socket.emit("heartbeat", self.socket_id);//发送这个消息的时候，必须让后端收到消息后，立马发送一个消息，这样来回一个接收过程，就可以判断当前还没有断开连接。
-                                self.serverTimeoutObj = setTimeout(function () { //如果超过一定时间还没重置，说明后端主动断开了
-                                    console.log("send close")
-                                    socket.emit("close", self.socket_id); //如果onclose会执行reconnect，我们执行ws.close()就行了.如果直接执行reconnect 会触发onclose导致重连两次
-                                    console.log('disconnect : ' + self.socket_id);
-                                    StopRecord(clientnum1[self.socket_id], "video", self.socket_id);
-                                    StopRecord(clientnum2[self.socket_id], "screen", self.socket_id);
+                                if (self.isfirst == false) {
                                     stuonline[stutable[self.socket_id].stu_no] = false;
-                                }, self.timeout)
-                            }, this.timeout)
+                                }
+                                else{
+                                    self.isfirst=false
+                                }
+                            }, self.timeout)
                         }
                     }
                     onecheck.start()
                     heartCheck[data.sender] = onecheck
                     stutable[data.sender] = data.msg;
-                    stuonline[data.msg.stu_no] = true;
+                    stuonline[data.msg.stu_no.toString()] = true;
                     restutable[data.msg.stu_no] = data.sender;
                     socket.emit('ok we connect', { receiver: data.sender, sender: { id: socket.id, no_id: '<%= msg.user.stu_no%>' } });
                 });
 
                 socket.on('user disconnected', (socket_id) => {
                     console.log('disconnect : ' + socket_id);
-                    StopRecord(clientnum1[socket_id], "video", socket_id);
-                    MergeVideo("video", socket_id)
-                    StopRecord(clientnum2[socket_id], "screen", socket_id);
-                    MergeVideo("screen", socket_id)
+                    StopRecord(clientnum1[socket_id], "video", socket_id, true);
+                    StopRecord(clientnum2[socket_id], "screen", socket_id, true);
                     stuonline[stutable[socket_id].stu_no] = false;
                 })
 
-                socket.on('reset', (socket_id) => {
-                    console.log("receive reset")
+                socket.on('user reset', (socket_id) => {
                     heartCheck[socket_id].reset()
                 })
 

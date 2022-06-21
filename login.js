@@ -126,7 +126,6 @@ router.get('/', function (req, res) {
         //read_conf_done = true
     }
     res.sendfile(path.join(__dirname, "public/login.html"))
-    //_dirname:ï¿½ï¿½Ç°ï¿½Ä¼ï¿½ï¿½ï¿½Â·ï¿½ï¿½ï¿½ï¿½path.join():ï¿½Ï²ï¿½Â·ï¿½ï¿½
 })
 GB2312UTF8 = {
     Dig2Dec: function (s) {
@@ -300,7 +299,7 @@ router.get('/login', function (req, res) {
             //console.log(res_json[0].stu_name)
             var tt = 'ÎÒÈÕÕâ¸öÊÀ½ç'
             tt = GB2312UTF8.GB2312ToUTF8(tt);
-            console.log(tt)
+            //console.log(tt)
             var msg = {
                 user: res_json[0],
                 conf: conf
@@ -311,6 +310,7 @@ router.get('/login', function (req, res) {
                     var result = md5.update(msg.user.stu_no).digest('hex');
                     if (msg.user.stu_password !== result) {
                         var query2 = "select * from student where stu_userlevel='0' and stu_enable='1'"
+                        console.log(query2)
                         connection.query(query2, function (err, resu) {
                             var all_stu = JSON.parse(JSON.stringify(resu));
                             var msg = {
@@ -318,14 +318,16 @@ router.get('/login', function (req, res) {
                                 conf: conf,
                                 stu: all_stu
                             }
-                            //console.log(all_stu)
                             res.render("server", { msg }, (err, data) => {
+                                if (err){
+                                    console.log(err)
+                                    return 
+                                }
                                 res.send(data);
                             })
                         })
                     }
                     else {
-                        console.log(msg)
                         res.render("changePwd", { msg }, (err, data) => {
                             res.send(data);
                         })

@@ -1,4 +1,5 @@
 <head>
+    <meta charset="gbk" />
     <title>Camera</title>
     <style>
         #user-list>li {
@@ -9,7 +10,7 @@
 
 <body>
     <h1 id="user-id">
-        <%= msg.user.stu_no %>
+        <%= msg.user.stu_no%>
     </h1>
     <ul id="user-list">
     </ul>
@@ -48,6 +49,7 @@
     <script src="//cdn.bootcdn.net/ajax/libs/socket.io/3.0.4/socket.io.js"></script>
     <script src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.js"></script>
     <script>
+        setInterval("SendReset()", '<%= msg.conf.disconnect %>'/2)
         function dataBegin() {
             let cameravideo = document.getElementsByName('cameravideo')
             let camerasound = document.getElementsByName('camerasound')
@@ -107,7 +109,7 @@
             if (canGetUserMediaUse()) {
                 getUserMedia({
                     video: {
-                        frameRate: { min: '<%= msg.conf.rate %>' },
+                        frameRate: '<%= msg.conf.rate %>',
                         width: { min: 720, ideal: '<%= msg.conf.width %>' },
                         height: { min: 540, ideal: '<%= msg.conf.high %>' },
                         aspectRatio: 16 / 9
@@ -144,7 +146,8 @@
                     video: {
                         mediaSource: 'screen',
                         width: { exact: 1920 },
-                        height: { exact: 1080 }
+                        height: { exact: 1080 },
+                        frameRate: '<%= msg.conf.rate %>'
                     },
                     audio: a
                 }, (stream) => {
@@ -171,15 +174,15 @@
                     pc[parterName].addTrack(track, localStream);//should trigger negotiationneeded event
                 });
 
-            } else {
-                dataBegin()
-            }
+            } 
             if (screenStream) {
                 screenStream.getTracks().forEach((track) => {
                     pc[parterName].addTrack(track, screenStream);//should trigger negotiationneeded event
                 });
-            } else {
-                dataBegin()
+            } 
+            if (!screenStream && !localStream){
+                alert('no stream selected!')
+                return 
             }
 
             console.log(localStream);
@@ -216,6 +219,10 @@
         //function getwebsocket() {
         var socket = io();
         var reconnect = [];
+        function SendReset(){
+            console.log('send reset')
+            socket.emit('reset', socket.id)
+        }
         socket.on('connect', () => {
 
             console.log('connect ' + socket.id);
@@ -287,22 +294,22 @@
                 }
             })
 
-            socket.on('heartbeat', (socket_id) => {
-                if (socket_id == socket.id) {
-                    console.log("receive heartbeat and send rest")
-                    socket.emit("reset", socket.id)
-                }
+            // socket.on('heartbeat', (socket_id) => {
+            //     if (socket_id == socket.id) {
+            //         console.log("receive heartbeat and send rest")
+            //         socket.emit("reset", socket.id)
+            //     }
 
-            })
+            // })
 
-            socket.on('close', (socket_id) => {
-                if (socket_id == socket.id) {
-                    console.log("reconnect")
-                    reconnect = true
-                    socket = io()
-                }
+            // socket.on('close', (socket_id) => {
+            //     if (socket_id == socket.id) {
+            //         console.log("reconnect")
+            //         reconnect = true
+            //         socket = io()
+            //     }
 
-            })
+            // })
         });
             // socket.onclose = function (event) {
             //     console.log('websocket closed');
