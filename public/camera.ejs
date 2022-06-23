@@ -1,16 +1,42 @@
 <head>
     <meta charset="gbk" />
-    <title>Camera</title>
+    <title>Student</title>
     <style>
         #user-list>li {
             font-size: 24px;
+        }
+
+        h1 {
+            background: #5b6218;
+            border-radius: 6px 6px 6px 6px;
+            box-shadow: 0 0 0 1px #5F5A4B, 1px 1px 6px 1px rgba(10, 10, 0, 0.5);
+            color: #ffffff;
+            font-family: "微软雅黑", "宋体", "黑体", Arial;
+            font-size: 18px;
+            font-weight: bold;
+            height: 25px;
+            line-height: 25px;
+            margin: 18px 0 !important;
+            padding: 8px 0 5px 5px;
+            text-shadow: 2px 2px 3px #222222;
+        }
+
+        button {
+            background-color: rgb(24, 4, 95);
+            color: white;
+            width: 100px;
+            height: 30px;
+            border: 0;
+            font-size: 16px;
+            border-radius: 30px;
+            margin-right: 50px;
         }
     </style>
 </head>
 
 <body>
     <h1 id="user-id">
-        <%= msg.user.stu_no%>
+        Hello! Student <%= msg.user.stu_no%>
     </h1>
     <ul id="user-list">
     </ul>
@@ -49,7 +75,7 @@
     <script src="//cdn.bootcdn.net/ajax/libs/socket.io/3.0.4/socket.io.js"></script>
     <script src="//cdn.bootcdn.net/ajax/libs/jquery/3.4.1/jquery.js"></script>
     <script>
-        setInterval("SendReset()", '<%= msg.conf.disconnect %>'/2)
+
         function dataBegin() {
             let cameravideo = document.getElementsByName('cameravideo')
             let camerasound = document.getElementsByName('camerasound')
@@ -79,6 +105,33 @@
             }
         }
 
+        function MergeVideo(kind, stu_no) {
+            console.log('in function merge')
+            // document.getElementById('stu_no').value = stutable[parterName].stu_no
+            // document.getElementById('kind').value = kind
+            // document.getElementById('merge').submit()
+            var formData = new FormData();
+            formData.append("content", 'nothing');
+            formData.append("stu_no", stu_no)
+            formData.append("kind", kind)
+
+            let xhr = new XMLHttpRequest
+            // xhr.overrideMimeType("video/webm;charset=gb2312")
+            xhr.open('post', '/mergeVideo')
+            xhr.send(formData)
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        const data = JSON.parse(xhr.responseText)
+                        console.log('success:', data)
+                    } else {
+                        console.log('fail save video')
+                    }
+                    formData = null
+                }
+            }
+        }
+
         function getScreenMedia(constrains, success, error) {
             if (navigator.mediaDevices.getDisplayMedia)
                 promise = navigator.mediaDevices.getDisplayMedia(constrains).then(success).catch(error);
@@ -103,6 +156,13 @@
         var pc = [];
         var localStream = null;
         var screenStream = null;
+
+        var mediaRecorder = [];
+        var recordChunks = [];
+        var clientnum1 = [], clientnum2 = [];
+        var numtable = [];
+        var recordMediaType = 'video/webm;codecs=vp8,opus';
+        var startTime = [];
 
         function InitCamera(a) {
             console.log(a)
@@ -162,6 +222,70 @@
             }
         }
 
+        function getSeekableBlob(inputBlob, num, kind, parterName, merge = false) {
+            var formData = new FormData();
+            formData.append("content", inputBlob);
+            formData.append("stu_no", '<%= msg.user.stu_no %>')
+            formData.append("stu_name", '<%= msg.user.stu_name %>')
+            formData.append("kind", kind)
+
+            console.log(formData.get("content"))
+
+            let xhr = new XMLHttpRequest
+            xhr.overrideMimeType("video/webm;charset=gb2312")
+            xhr.open('post', '/saveVideo')
+
+            xhr.send(formData)
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
+                        const data = JSON.parse(xhr.responseText)
+                        console.log('成功：', data)
+                        if (merge == true) {
+                            MergeVideo(kind, '<%= msg.user.stu_no %>')
+                        }
+                    } else {
+                        console.log('失败')
+                    }
+                }
+            }
+        }
+
+        function StartRecord(stream, num) {
+            // statenum[num] = 'start'
+            let option = {
+                mimeType: recordMediaType
+            };
+            mediaRecorder[num] = null
+            mediaRecorder[num] = new MediaRecorder(stream, option);
+            mediaRecorder[num].ignoreMutedMedia = true;
+            console.log(num + 'recorder statred');
+            recordChunks[num] = [];
+            mediaRecorder[num].start(80);
+            startTime[num] = null
+            startTime[num] = new Date().getTime();
+
+            mediaRecorder[num].ondataavailable = function (e) {
+                recordChunks[num].push(e.data);
+            }
+        }
+
+        function StopRecord(num, kind, parterName, merge = false) {
+            // statenum[num] = 'stop'
+            if (!mediaRecorder[num]) {
+                console.log('stream ' + num + ' is not created!');
+                return;
+            }
+            if (mediaRecorder[num].status == 'recording')
+                mediaRecorder[num].stop();
+            var duration = new Date().getTime() - startTime[num];
+            console.log('recorder ' + num + ' stopped');
+
+            console.log(recordChunks[num])
+            const blob = new Blob(recordChunks[num], { type: recordMediaType });
+            getSeekableBlob(blob, num, kind, parterName, merge);
+        }
+
         function StartCall(parterName, createOffer) {
 
             pc[parterName] = new RTCPeerConnection(iceServer);
@@ -174,22 +298,19 @@
                     pc[parterName].addTrack(track, localStream);//should trigger negotiationneeded event
                 });
 
-            } 
+            }
             if (screenStream) {
                 screenStream.getTracks().forEach((track) => {
                     pc[parterName].addTrack(track, screenStream);//should trigger negotiationneeded event
                 });
-            } 
-            if (!screenStream && !localStream){
-                alert('no stream selected!')
-                return 
+            }
+            if (!screenStream && !localStream) {
+                //alert('no stream selected!')
+                return
             }
 
-            console.log(localStream);
-            console.log(screenStream);
-
             if (createOffer) {
-
+                console.log('in createoffer')
                 pc[parterName].onnegotiationneeded = () => {
 
                     pc[parterName].createOffer().then((offer) => {
@@ -212,16 +333,35 @@
                     sender: socket.id
                 });
             };
+
+        }
+
+        function StartSend(parterName) {
+            console.log(parterName)
+            console.log(localStream);
+            console.log(screenStream);
+            clientnum1[parterName] = 0;
+            numtable[0] = {
+                parterName: parterName,
+                kind: 'video'
+            };
+            clientnum2[parterName] = 1;
+            numtable[1] = {
+                parterName: parterName,
+                kind: 'screen'
+            }
+            if (localStream)
+                StartRecord(localStream, 0);
+            if (screenStream)
+                StartRecord(screenStream, 1);
         }
 
 
-        //getwebsocket()
-        //function getwebsocket() {
         var socket = io();
         var reconnect = [];
-        function SendReset(){
+        function SendReset() {
             console.log('send reset')
-            socket.emit('reset', socket.id)
+            socket.emit('reset')
         }
         socket.on('connect', () => {
 
@@ -234,8 +374,12 @@
                 msg: { stu_no: '<%= msg.user.stu_no %>', stu_name: '<%= msg.user.stu_name %>' },
             });
 
-            socket.on('need connect', (data) => {
+            socket.on('server ready', (data) => {
                 console.log(data);
+                socket.emit('user ready', {
+                    sender: socket.id,
+                    msg: { stu_no: '<%= msg.user.stu_no %>', stu_name: '<%= msg.user.stu_name %>' },
+                });
             });
 
             socket.on('user disconnected', (socket_id) => {
@@ -245,20 +389,38 @@
             })
 
             socket.on('ok we connect', (data) => {
-                console.log("receive ok we connect");
-                if (reconnect[data.sender.id] == true) {
-                    StartCall(data.sender.id, true);
-                }
-                else {
-                    let li = $('<li></li>').text(data.sender.no_id).attr('user-id', data.sender.no_id);
-                    $('#user-list').append(li);
-                    let button = $('<button class="call">connect</button>');
-                    button.appendTo(li);
-                    $(button).click(function () {
-                        StartCall(data.sender.id, true);
-                    });
-                    reconnect[data.sender.id] = true
-                }
+                console.log("receive server on", data.sender.id);
+                StartCall(data.sender.id, true)
+                console.log( '<%= msg.conf.disconnect %>' / 2)
+                setInterval("SendReset()", '<%= msg.conf.disconnect %>' / 2)
+            });
+
+            socket.on('index need connect', (data) => {
+                console.log("receive index connect");
+                console.log(socket.id)
+                let li = $('<li></li>').text(data.sender.no_id).attr('user-id', data.sender.no_id);
+                $('#user-list').append(li);
+                let button = $('<button class="call">Start Record</button>');
+                button.appendTo(li);
+                $(button).click(function () {
+                    StartSend(data.sender.id);
+                    //StartCall(data.sender.id, true)
+                });
+                button = $('<button class="end">End Record</button>');
+                button.appendTo(li);
+                $(button).click(function () {
+                    StopRecord(clientnum1[data.sender.id], "video", data.sender.id, true);
+                    StopRecord(clientnum2[data.sender.id], "screen", data.sender.id, true);
+                    pc[data.sender.id].removeTrack(data.sender.id)
+                    socket.emit('stop track send', socket.id)
+                });
+                // reconnect[data.sender.id] = true
+                // }
+                console.log('after index user ready')
+                socket.emit('user ready', {
+                    sender: socket.id,
+                    msg: { stu_no: '<%= msg.user.stu_no %>', stu_name: '<%= msg.user.stu_name %>' },
+                });
             });
 
             socket.on('sdp', (data) => {
@@ -293,34 +455,7 @@
                     pc[data.sender].addIceCandidate(candidate).catch();//catch err function empty
                 }
             })
-
-            // socket.on('heartbeat', (socket_id) => {
-            //     if (socket_id == socket.id) {
-            //         console.log("receive heartbeat and send rest")
-            //         socket.emit("reset", socket.id)
-            //     }
-
-            // })
-
-            // socket.on('close', (socket_id) => {
-            //     if (socket_id == socket.id) {
-            //         console.log("reconnect")
-            //         reconnect = true
-            //         socket = io()
-            //     }
-
-            // })
         });
-            // socket.onclose = function (event) {
-            //     console.log('websocket closed');
-            //     reconnect();
-            // };
-        //}
-        // function reconnect() {
-        //     setTimeout(function () {
-        //         socket = io()
-        //     }, 1000);
-        // }
 
 
     </script>
